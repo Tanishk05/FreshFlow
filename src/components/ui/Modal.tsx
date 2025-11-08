@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sprout } from "lucide-react";
+import GoogleBtn from "../authButtons/GoogleBtn";
+import EmailSignInForm from "../authButtons/EmailBtn";
 
 type ModalProps = {
   isOpen: boolean;
@@ -66,66 +68,32 @@ export default function Modal({ isOpen, onClose, type }: ModalProps) {
               </button>
 
               <h2 className="text-2xl font-bold text-center mb-6 text-green-700 dark:text-green-400">
-                {showSignup ? "Create Account" : "Log In"}
+                {/* Simplified title */}
+                Sign in or create account
               </h2>
 
-              <form className="space-y-4">
-                <div className="relative">
-                  <input
-                    type="email"
-                    placeholder="you@company.com"
-                    className="peer w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <label className="absolute left-3 -top-2.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-1">
-                    Email
-                  </label>
-                </div>
+              {/* --- 1. Your Google Button --- */}
+              {/* I removed the 'mt-4' from GoogleBtn and added spacing here */}
+              <div className="space-y-4">
+                <GoogleBtn />
 
-                <div className="relative">
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="peer w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <label className="absolute left-3 -top-2.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-1">
-                    Password
-                  </label>
-                </div>
-
-                {showSignup && (
-                  <div className="relative">
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      className="peer w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                    <label className="absolute left-3 -top-2.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-1">
-                      Confirm Password
-                    </label>
+                {/* --- 2. "Or" Divider --- */}
+                <div className="relative flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-gray-300 dark:border-gray-600"></span>
                   </div>
-                )}
+                  <span className="relative z-10 px-2 bg-white dark:bg-gray-800 text-sm text-gray-500">
+                    Or
+                  </span>
+                </div>
 
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="submit"
-                  className="w-full bg-green-600 text-white py-2 rounded-full font-medium hover:bg-green-700"
-                >
-                  {showSignup ? "Create Account" : "Log In"}
-                </motion.button>
-              </form>
+                {/* --- 3. The New Email Form --- */}
+                <EmailSignInForm />
+              </div>
 
-              <p className="text-sm text-center text-gray-500 dark:text-gray-400 mt-6">
-                {showSignup
-                  ? "Already have an account?"
-                  : "Don't have an account?"}
-                <button
-                  onClick={() => setShowSignup(!showSignup)}
-                  className="font-medium text-green-600 hover:underline ml-1"
-                >
-                  {showSignup ? "Log In" : "Sign Up"}
-                </button>
-              </p>
+              {/* You no longer need the "Don't have an account?" toggle,
+    since the magic link handles both login and sign-up.
+  */}
             </div>
           </motion.div>
         </motion.div>
