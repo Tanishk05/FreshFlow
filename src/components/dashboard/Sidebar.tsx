@@ -1,23 +1,29 @@
 "use client";
-import React from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import React, { useState, useEffect } from "react"; // <-- Import useState and useEffect
+// import Link from "next/link"; // Removed
+// import { usePathname } from "next/navigation"; // Removed
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutGrid,
   BarChartHorizontal,
   Package,
   AlertCircle,
-  Settings,
   Sprout,
   ChevronLeft,
   ClipboardList,
-  Ship, // <-- New Icon
+  Ship,
+  Truck, // Icon for Distributor & Retailer Incoming
+  Store, // Icon for Retailer
+  Tag, // Icon for Retailer Pricing
+  Warehouse, // Icon for Distributor Warehouse
 } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import Image from "next/image";
+// import Image from "next/image"; // Removed
 
-const navLinks = [
+// --- Configuration for each Dashboard Role ---
+
+const farmerLinks = [
   {
     name: "Dashboard",
     href: "/dashboards/farmer",
@@ -30,10 +36,94 @@ const navLinks = [
   },
   { name: "Harvests", href: "#manage", icon: <Package size={20} /> },
   { name: "Orders", href: "#orders", icon: <ClipboardList size={20} /> },
-  { name: "Shipments", href: "#shipments", icon: <Ship size={20} /> }, // <-- New Link
-  { name: "Reports", href: "#", icon: <AlertCircle size={20} /> },
-  { name: "Alerts", href: "#", icon: <Settings size={20} /> },
+  { name: "Shipments", href: "#shipments", icon: <Ship size={20} /> },
+  { name: "Alerts", href: "#alerts", icon: <AlertCircle size={20} /> },
 ];
+
+const retailerLinks = [
+  {
+    name: "Dashboard",
+    href: "/dashboards/retailer",
+    icon: <LayoutGrid size={20} />,
+  },
+  {
+    name: "AI Pricing",
+    href: "#pricing",
+    icon: <Tag size={20} />,
+  },
+  {
+    name: "Store Inventory",
+    href: "#inventory",
+    icon: <Package size={20} />,
+  },
+  {
+    name: "Incoming",
+    href: "#deliveries",
+    icon: <Truck size={20} />,
+  },
+  {
+    name: "Demand",
+    href: "#demand",
+    icon: <BarChartHorizontal size={20} />,
+  },
+  {
+    name: "Alerts",
+    href: "#alerts",
+    icon: <AlertCircle size={20} />,
+  },
+];
+
+const distributorLinks = [
+  {
+    name: "Dashboard",
+    href: "/dashboards/distributor",
+    icon: <LayoutGrid size={20} />,
+  },
+  {
+    name: "Pending Orders",
+    href: "#orders",
+    icon: <ClipboardList size={20} />,
+  },
+  {
+    name: "Warehouse",
+    href: "#warehouse",
+    icon: <Warehouse size={20} />,
+  },
+  { name: "Fleet", href: "#fleet", icon: <Ship size={20} /> },
+  { name: "AI Alerts", href: "#alerts", icon: <AlertCircle size={20} /> },
+];
+
+const dashboardConfigs = {
+  farmer: {
+    title: "Farm Planner",
+    icon: Sprout,
+    navLinks: farmerLinks,
+    user: {
+      name: "Riya Patel",
+      avatarUrl: "https://avatar.vercel.sh/riya-patel.png",
+    },
+  },
+  retailer: {
+    title: "Retailer Hub",
+    icon: Store,
+    navLinks: retailerLinks,
+    user: {
+      name: "Sam Chen",
+      avatarUrl: "https://avatar.vercel.sh/sam-chen.png",
+    },
+  },
+  distributor: {
+    title: "Logistics AI",
+    icon: Truck,
+    navLinks: distributorLinks,
+    user: {
+      name: "Maria Gomez",
+      avatarUrl: "https://avatar.vercel.sh/maria-gomez.png",
+    },
+  },
+};
+
+// --- End Configuration ---
 
 type SidebarProps = {
   role: "farmer" | "retailer" | "distributor";
@@ -43,12 +133,33 @@ type SidebarProps = {
   setIsMobileOpen: (isOpen: boolean) => void;
 };
 
-// ... (SidebarContent function is unchanged)
+/**
+ * Inner content of the sidebar. This is separated so we can
+ * reuse it for both mobile and desktop sidebars.
+ */
 function SidebarContent({
   role,
   isShrunk,
 }: Omit<SidebarProps, "isMobileOpen" | "setIsMobileOpen" | "setIsShrunk">) {
-  const pathname = usePathname();
+  // Use window.location.pathname for client-side routing detection
+  // Added check for 'window' to avoid SSR errors
+
+  // --- FIX: Use state and effect to avoid hydration mismatch ---
+  const [pathname, setPathname] = useState(""); // Initial state matches server
+
+  useEffect(() => {
+    // This code only runs on the client, after the component has hydrated
+    setPathname(window.location.pathname);
+  }, []); // Empty array ensures this runs only once on mount
+  // --- END FIX ---
+
+  // Get the correct config based on the role
+  const {
+    title,
+    icon: Icon,
+    navLinks,
+    user,
+  } = dashboardConfigs[role] || dashboardConfigs.farmer;
 
   return (
     <div className="flex flex-col h-full">
@@ -58,13 +169,13 @@ function SidebarContent({
           isShrunk ? "justify-center" : ""
         }`}
       >
-        <Sprout className="text-green-600 shrink-0" size={28} />
+        <Icon className="text-green-600 shrink-0" size={28} />
         <motion.h1
           animate={{ opacity: isShrunk ? 0 : 1, width: isShrunk ? 0 : "auto" }}
           transition={{ duration: 0.2 }}
           className="text-xl font-bold text-gray-900 dark:text-white overflow-hidden whitespace-nowrap"
         >
-          Farm Planner
+          {title}
         </motion.h1>
       </div>
 
@@ -73,12 +184,16 @@ function SidebarContent({
         <Tooltip.Provider delayDuration={0}>
           <ul className="space-y-2">
             {navLinks.map((link) => {
-              const isActive = pathname === link.href;
+              // Only highlight the main dashboard link, not anchor links
+              // This logic now runs safely with the stateful 'pathname'
+              const isActive =
+                pathname === link.href && link.href.includes("/dashboards/");
               return (
                 <li key={link.name}>
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
-                      <Link
+                      {/* Replaced Next.js Link with standard <a> tag */}
+                      <a
                         href={link.href}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${
                           isShrunk ? "justify-center" : ""
@@ -99,7 +214,7 @@ function SidebarContent({
                         >
                           {link.name}
                         </motion.span>
-                      </Link>
+                      </a>
                     </Tooltip.Trigger>
                     {isShrunk && (
                       <Tooltip.Portal>
@@ -131,9 +246,10 @@ function SidebarContent({
             isShrunk ? "justify-center" : ""
           }`}
         >
+          {/* Replaced Next.js Image with standard <img> tag */}
           <Image
-            src="https://avatar.vercel.sh/riya-patel.png"
-            alt="Riya Patel"
+            src={user.avatarUrl}
+            alt={user.name}
             className="w-10 h-10 rounded-full shrink-0"
             width={40}
             height={40}
@@ -147,7 +263,7 @@ function SidebarContent({
             className="overflow-hidden"
           >
             <p className="font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-              Riya Patel
+              {user.name}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">
               {role}
@@ -159,7 +275,11 @@ function SidebarContent({
   );
 }
 
-// ... (Main Sidebar export function is unchanged)
+/**
+ * Main Sidebar component.
+ * Handles the mobile/desktop layout, backdrop, and shrink button.
+ * The inner content is rendered by SidebarContent.
+ */
 export default function Sidebar(props: SidebarProps) {
   const { isMobileOpen, setIsMobileOpen, isShrunk, setIsShrunk } = props;
 

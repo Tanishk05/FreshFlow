@@ -1,30 +1,4 @@
-export type Crop = {
-  id: string;
-  name: string;
-  quantityKg: number;
-  harvestDate: string; // ISO
-  pricePerKg: number;
-  status: "growing" | "ready" | "sold";
-};
-
-export type Order = {
-  id: string;
-  item: string;
-  quantity: number;
-  expiryDate: string; // ISO
-  currentPrice: number;
-  suggestedDiscount?: number;
-  status: "pending" | "completed" | "cancelled";
-};
-
-export type Shipment = {
-  id: string;
-  origin: string;
-  destination: string;
-  status: "in-transit" | "delivered" | "delayed";
-  temperatureC: number;
-  eta: string;
-};
+import { Crop, Order, Shipment } from "./types";
 
 // Use a static time for all mock data to prevent hydration errors
 const baseTime = new Date("2025-11-03T12:00:00Z").getTime();
