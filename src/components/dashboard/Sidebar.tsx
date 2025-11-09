@@ -1,7 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react"; // <-- Import useState and useEffect
-// import Link from "next/link"; // Removed
-// import { usePathname } from "next/navigation"; // Removed
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutGrid,
@@ -16,10 +14,11 @@ import {
   Store, // Icon for Retailer
   Tag, // Icon for Retailer Pricing
   Warehouse, // Icon for Distributor Warehouse
+  ShoppingCart, // --- ADDED for Farmer Marketplace
+  ListOrdered, // --- ADDED for Distributor Order Book
 } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import Image from "next/image";
-// import Image from "next/image"; // Removed
 
 // --- Configuration for each Dashboard Role ---
 
@@ -35,6 +34,13 @@ const farmerLinks = [
     icon: <BarChartHorizontal size={20} />,
   },
   { name: "Harvests", href: "#manage", icon: <Package size={20} /> },
+  // --- ADDED ---
+  {
+    name: "Marketplace",
+    href: "#marketplace",
+    icon: <ShoppingCart size={20} />,
+  },
+  // --- END ---
   { name: "Orders", href: "#orders", icon: <ClipboardList size={20} /> },
   { name: "Shipments", href: "#shipments", icon: <Ship size={20} /> },
   { name: "Alerts", href: "#alerts", icon: <AlertCircle size={20} /> },
@@ -51,6 +57,13 @@ const retailerLinks = [
     href: "#pricing",
     icon: <Tag size={20} />,
   },
+  // --- ADDED ---
+  {
+    name: "Buy Produce",
+    href: "#procurement",
+    icon: <Sprout size={20} />,
+  },
+  // --- END ---
   {
     name: "Store Inventory",
     href: "#inventory",
@@ -84,6 +97,13 @@ const distributorLinks = [
     href: "#orders",
     icon: <ClipboardList size={20} />,
   },
+  // --- ADDED ---
+  {
+    name: "Order Book",
+    href: "#order-book",
+    icon: <ListOrdered size={20} />,
+  },
+  // --- END ---
   {
     name: "Warehouse",
     href: "#warehouse",

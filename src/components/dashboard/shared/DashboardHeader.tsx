@@ -3,6 +3,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { ThemeSwitcher } from "@/components/dashboard/ThemeSwitcher"; // Assuming this exists
 import { Plus, Download, Bell, Menu } from "lucide-react";
+import SignOutBtn from "@/components/authButtons/SignOutBtn";
 
 type Props = {
   onNewPlanClick: () => void;
@@ -54,6 +55,7 @@ export default function DashboardHeader({
           </h1>
         </div>
         <div className="flex items-center gap-4">
+          <SignOutBtn/>
           <ThemeSwitcher />
           <motion.button
             whileHover={{ scale: 1.05 }}

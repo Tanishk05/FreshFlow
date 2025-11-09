@@ -28,6 +28,9 @@ import IncomingDeliveries from "@/components/dashboard/retailer/IncomingDeliveri
 import ConsumerDemandForecast from "@/components/dashboard/retailer/ConsumerDemandForecast";
 // import NewPurchaseOrderModal from "@/components/dashboard/retailer/NewPurchaseOrderModal"; // Assuming Modal exists
 
+// --- ADDED: Import the new component ---
+import BuyProduce from "@/components/dashboard/retailer/BuyProduce";
+
 export default function RetailerDashboard() {
   // --- STATE ---
   const [inventory, setInventory] = useState<StoreItem[]>(
@@ -133,6 +136,9 @@ export default function RetailerDashboard() {
                 inventory={inventory}
                 onMarkSpoiled={markAsSpoiled}
               />
+
+              {/* --- ADDED: The new component is rendered here --- */}
+              <BuyProduce />
             </div>
 
             {/* --- Right Column --- */}

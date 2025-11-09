@@ -4,6 +4,7 @@ import NextAuth from "next-auth";
 import authConfig from "./auth.config";
 
 // Initialize NextAuth with ONLY the lite config
+// THIS IS NOW CORRECT, as auth.config.ts has all the callbacks
 const { auth } = NextAuth(authConfig);
 
 // THIS IS THE FIX:

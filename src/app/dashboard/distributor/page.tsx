@@ -30,6 +30,9 @@ import LogisticsAlerts from "@/components/dashboard/distributor/LogisticsAlerts"
 import WarehouseInventory from "@/components/dashboard/distributor/WarehouseInventory";
 // import NewRouteModal from "@/components/dashboard/distributor/NewRouteModal";
 
+// --- ADDED: Import the new component ---
+import OrderBook from "@/components/dashboard/distributor/OrderBook";
+
 export default function DistributorDashboard() {
   // --- STATE ---
   const [warehouseStock, setWarehouseStock] = useState<WarehouseItem[]>(
@@ -124,6 +127,9 @@ export default function DistributorDashboard() {
               />
 
               <WarehouseInventory stock={warehouseStock} />
+
+              {/* --- ADDED: The new component is rendered here --- */}
+              <OrderBook />
             </div>
 
             {/* --- Right Column --- */}

@@ -23,7 +23,13 @@ import ShipmentsCard from "@/components/dashboard/farmer/ShipmentsCard";
 import PerformanceCard from "@/components/dashboard/farmer/PerformanceCard";
 import MapCard from "@/components/dashboard/farmer/MapCard";
 import AddCropModal from "@/components/dashboard/farmer/AddCropModal";
-import { FormattedTime } from "@/components/dashboard/FormattedTime"; // Still needed for alerts
+import { FormattedTime } from "@/components/dashboard/FormattedTime";
+
+// --- ADDED: Import the new component ---
+import FarmerMarketplace from "@/components/dashboard/farmer/FarmerMarketplace";
+
+// --- REMOVED: Icons (Leaf, Package) are no longer needed here ---
+// --- REMOVED: initialMarketplaceItems is no longer needed here ---
 
 export default function FarmerDashboard() {
   // --- STATE ---
@@ -215,6 +221,9 @@ export default function FarmerDashboard() {
                 allCropsData={allCropsChartData}
                 statusData={statusChartData}
               />
+
+              {/* --- CHANGED: Now using the imported component --- */}
+              <FarmerMarketplace />
             </div>
 
             {/* --- Right Column --- */}
@@ -239,3 +248,5 @@ export default function FarmerDashboard() {
     </DashboardLayout>
   );
 }
+
+// --- REMOVED: The FarmerMarketplace function is now in its own file ---
