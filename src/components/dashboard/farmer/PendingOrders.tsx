@@ -1,6 +1,5 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Order } from "@/lib/data/farmerMockData";
 import { Clock, Check, X as XIcon } from "lucide-react";
 
 const itemVariants = {
@@ -8,8 +7,19 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
+type OrderFromDB = {
+  _id: string;
+  produceName: string;
+  quantity: number;
+  unit: string;
+  pricePerUnit: number;
+  totalPrice: number;
+  status: string;
+  orderDate: Date;
+};
+
 type Props = {
-  orders: Order[];
+  orders: OrderFromDB[];
   onApprove: (id: string) => void;
   onCancel: (id: string) => void;
 };
@@ -30,7 +40,7 @@ export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
             <AnimatePresence>
               {orders.map((order) => (
                 <motion.tr
-                  key={order.id}
+                  key={order._id}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
@@ -41,26 +51,26 @@ export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
                     <div className="flex items-center">
                       <Clock className="w-4 h-4 text-yellow-500 mr-3 shrink-0" />
                       <span className="text-gray-900 dark:text-gray-100 font-medium">
-                        {order.item}
+                        {order.produceName}
                       </span>
                     </div>
                   </td>
                   <td className="py-4 px-3 text-gray-600 dark:text-gray-300">
-                    {order.quantity} kg
+                    {order.quantity} {order.unit}
                   </td>
                   <td className="py-4 px-3 text-green-600 dark:text-green-400 font-medium">
-                    ${(order.currentPrice * order.quantity).toFixed(2)}
+                    ₹{order.totalPrice.toFixed(2)}
                   </td>
                   <td className="py-4 pl-3 text-right flex gap-2 justify-end">
                     <button
-                      onClick={() => onCancel(order.id)}
+                      onClick={() => onCancel(order._id)}
                       className="p-2 rounded-lg text-sm text-gray-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50"
                       aria-label="Cancel order"
                     >
                       <XIcon size={16} />
                     </button>
                     <button
-                      onClick={() => onApprove(order.id)}
+                      onClick={() => onApprove(order._id)}
                       className="px-3 py-1 rounded-lg text-sm bg-green-600 text-white hover:bg-green-700 flex items-center gap-1.5"
                     >
                       <Check size={16} />

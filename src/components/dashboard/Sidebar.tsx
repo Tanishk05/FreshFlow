@@ -5,7 +5,6 @@ import {
   LayoutGrid,
   BarChartHorizontal,
   Package,
-  AlertCircle,
   Sprout,
   ChevronLeft,
   ClipboardList,
@@ -19,51 +18,73 @@ import {
 } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import Image from "next/image";
+import { useRouter, usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 // --- Configuration for each Dashboard Role ---
 
 const farmerLinks = [
   {
     name: "Dashboard",
-    href: "/dashboards/farmer",
+    href: "/dashboard/farmer",
     icon: <LayoutGrid size={20} />,
   },
+  {
+    name: "My Produce",
+    href: "/my-produce",
+    icon: <Package size={20} />,
+  },
+  {
+    name: "Marketplace",
+    href: "/marketplace/farmer",
+    icon: <ShoppingCart size={20} />,
+  },
+];
+
+const retailerLinks = [
+  {
+    name: "Dashboard",
+    href: "/dashboard/retailer",
+    icon: <LayoutGrid size={20} />,
+  },
+  {
+    name: "Buy Produce",
+    href: "/marketplace/retailer",
+    icon: <Sprout size={20} />,
+  },
+];
+
+const distributorLinks = [
+  {
+    name: "Dashboard",
+    href: "/dashboard/distributor",
+    icon: <LayoutGrid size={20} />,
+  },
+  {
+    name: "Order Book",
+    href: "/order-book",
+    icon: <ListOrdered size={20} />,
+  },
+];
+
+// Mobile-only links (hash anchors for in-page navigation)
+const farmerMobileLinks = [
   {
     name: "Demand Forecasts",
     href: "#analytics",
     icon: <BarChartHorizontal size={20} />,
   },
   { name: "Harvests", href: "#manage", icon: <Package size={20} /> },
-  // --- ADDED ---
-  {
-    name: "Marketplace",
-    href: "#marketplace",
-    icon: <ShoppingCart size={20} />,
-  },
-  // --- END ---
   { name: "Orders", href: "#orders", icon: <ClipboardList size={20} /> },
   { name: "Shipments", href: "#shipments", icon: <Ship size={20} /> },
-  { name: "Alerts", href: "#alerts", icon: <AlertCircle size={20} /> },
 ];
 
-const retailerLinks = [
-  {
-    name: "Dashboard",
-    href: "/dashboards/retailer",
-    icon: <LayoutGrid size={20} />,
-  },
+const retailerMobileLinks = [
   {
     name: "AI Pricing",
     href: "#pricing",
     icon: <Tag size={20} />,
   },
-  // --- ADDED ---
-  {
-    name: "Buy Produce",
-    href: "#procurement",
-    icon: <Sprout size={20} />,
-  },
-  // --- END ---
   {
     name: "Store Inventory",
     href: "#inventory",
@@ -79,67 +100,40 @@ const retailerLinks = [
     href: "#demand",
     icon: <BarChartHorizontal size={20} />,
   },
-  {
-    name: "Alerts",
-    href: "#alerts",
-    icon: <AlertCircle size={20} />,
-  },
 ];
 
-const distributorLinks = [
-  {
-    name: "Dashboard",
-    href: "/dashboards/distributor",
-    icon: <LayoutGrid size={20} />,
-  },
+const distributorMobileLinks = [
   {
     name: "Pending Orders",
     href: "#orders",
     icon: <ClipboardList size={20} />,
   },
-  // --- ADDED ---
-  {
-    name: "Order Book",
-    href: "#order-book",
-    icon: <ListOrdered size={20} />,
-  },
-  // --- END ---
   {
     name: "Warehouse",
     href: "#warehouse",
     icon: <Warehouse size={20} />,
   },
   { name: "Fleet", href: "#fleet", icon: <Ship size={20} /> },
-  { name: "AI Alerts", href: "#alerts", icon: <AlertCircle size={20} /> },
 ];
 
 const dashboardConfigs = {
   farmer: {
-    title: "Farm Planner",
+    title: "FreshFlow",
     icon: Sprout,
     navLinks: farmerLinks,
-    user: {
-      name: "Riya Patel",
-      avatarUrl: "https://avatar.vercel.sh/riya-patel.png",
-    },
+    mobileLinks: farmerMobileLinks,
   },
   retailer: {
-    title: "Retailer Hub",
+    title: "FreshFlow",
     icon: Store,
     navLinks: retailerLinks,
-    user: {
-      name: "Sam Chen",
-      avatarUrl: "https://avatar.vercel.sh/sam-chen.png",
-    },
+    mobileLinks: retailerMobileLinks,
   },
   distributor: {
-    title: "Logistics AI",
+    title: "FreshFlow",
     icon: Truck,
     navLinks: distributorLinks,
-    user: {
-      name: "Maria Gomez",
-      avatarUrl: "https://avatar.vercel.sh/maria-gomez.png",
-    },
+    mobileLinks: distributorMobileLinks,
   },
 };
 
@@ -151,6 +145,8 @@ type SidebarProps = {
   setIsShrunk: (isShrunk: boolean) => void;
   isMobileOpen: boolean;
   setIsMobileOpen: (isOpen: boolean) => void;
+  /** Optional handler to open alerts side panel */
+  onAlertsClick?: () => void;
 };
 
 /**
@@ -160,26 +156,59 @@ type SidebarProps = {
 function SidebarContent({
   role,
   isShrunk,
-}: Omit<SidebarProps, "isMobileOpen" | "setIsMobileOpen" | "setIsShrunk">) {
-  // Use window.location.pathname for client-side routing detection
-  // Added check for 'window' to avoid SSR errors
+  onAlertsClick,
+  isMobile = false,
+  setIsMobileOpen,
+}: Omit<SidebarProps, "setIsShrunk"> & {
+  onAlertsClick?: () => void;
+  isMobile?: boolean;
+}) {
+  // Use Next.js usePathname hook for automatic route updates
+  const pathname = usePathname();
 
-  // --- FIX: Use state and effect to avoid hydration mismatch ---
-  const [pathname, setPathname] = useState(""); // Initial state matches server
+  // Track active hash for hash anchor links
+  const [activeHash, setActiveHash] = useState("");
 
+  // Update active hash when URL hash changes
   useEffect(() => {
-    // This code only runs on the client, after the component has hydrated
-    setPathname(window.location.pathname);
-  }, []); // Empty array ensures this runs only once on mount
-  // --- END FIX ---
+    // Listen for hash changes
+    const handleHashChange = () => {
+      setActiveHash(window.location.hash);
+    };
+
+    // Set initial hash on mount
+    handleHashChange();
+
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  // router for client-side navigation
+  const router = useRouter();
+
+  // Get session data for the logged-in user
+  const { data: session } = useSession();
 
   // Get the correct config based on the role
-  const {
-    title,
-    icon: Icon,
-    navLinks,
-    user,
-  } = dashboardConfigs[role] || dashboardConfigs.farmer;
+  const config = dashboardConfigs[role] || dashboardConfigs.farmer;
+  const { title, icon: Icon, navLinks, mobileLinks } = config;
+
+  // Use mobile links on mobile, desktop links on desktop
+  const linksToShow = isMobile ? [...navLinks, ...mobileLinks] : navLinks;
+
+  // Get display name: username if present, otherwise first name from full name
+  const getDisplayName = () => {
+    // @ts-expect-error - username is a custom field that may not be in the type
+    if (session?.user?.username) {
+      // @ts-expect-error - username is a custom field
+      return `@${session.user.username}`;
+    }
+    if (session?.user?.name) {
+      // Extract first name from full name
+      return session.user.name.split(" ")[0];
+    }
+    return "User";
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -203,18 +232,83 @@ function SidebarContent({
       <nav className="flex-1">
         <Tooltip.Provider delayDuration={0}>
           <ul className="space-y-2">
-            {navLinks.map((link) => {
-              // Only highlight the main dashboard link, not anchor links
-              // This logic now runs safely with the stateful 'pathname'
-              const isActive =
-                pathname === link.href && link.href.includes("/dashboards/");
+            {linksToShow.map((link) => {
+              // Highlight active link for all routes (dashboard, marketplace, order-book)
+              // For hash anchor links, check if current hash matches
+              const isActive = link.href.startsWith("#")
+                ? activeHash === link.href
+                : pathname === link.href;
+              // If this is the alerts item we render a button that triggers the sidepanel
+              if (link.name.toLowerCase().includes("alert")) {
+                return (
+                  <li key={link.name}>
+                    <Tooltip.Root>
+                      <Tooltip.Trigger asChild>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (onAlertsClick) onAlertsClick();
+                          }}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${
+                            isShrunk ? "justify-center" : ""
+                          } text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white`}
+                        >
+                          <div className="shrink-0">{link.icon}</div>
+                          <motion.span
+                            animate={{
+                              opacity: isShrunk ? 0 : 1,
+                              width: isShrunk ? 0 : "auto",
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden whitespace-nowrap"
+                          >
+                            {link.name}
+                          </motion.span>
+                        </button>
+                      </Tooltip.Trigger>
+                      {isShrunk && (
+                        <Tooltip.Portal>
+                          <Tooltip.Content
+                            side="right"
+                            className="z-50 ml-2 px-3 py-1.5 text-sm font-medium text-white bg-gray-900 rounded-md shadow-lg dark:bg-gray-700"
+                          >
+                            {link.name}
+                            <Tooltip.Arrow className="fill-gray-900 dark:fill-gray-700" />
+                          </Tooltip.Content>
+                        </Tooltip.Portal>
+                      )}
+                    </Tooltip.Root>
+                  </li>
+                );
+              }
+
               return (
                 <li key={link.name}>
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
-                      {/* Replaced Next.js Link with standard <a> tag */}
+                      {/* Render a real anchor so Radix Tooltip's asChild wraps a DOM node.
+                          For internal app routes use router.push for SPA navigation; for
+                          hash anchors let the browser handle scrolling. */}
                       <a
                         href={link.href}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          // Close mobile sidebar before navigating
+                          if (isMobile) {
+                            setIsMobileOpen(false);
+                          }
+
+                          // If it's a hash anchor, navigate to dashboard first then scroll
+                          if (link.href.startsWith("#")) {
+                            const dashboardPath = `/dashboard/${role}`;
+                            router.push(dashboardPath + link.href);
+                            // Update active hash immediately for visual feedback
+                            setActiveHash(link.href);
+                          } else {
+                            // For regular routes, use router.push
+                            router.push(link.href);
+                          }
+                        }}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${
                           isShrunk ? "justify-center" : ""
                         } ${
@@ -261,15 +355,24 @@ function SidebarContent({
           isShrunk ? "justify-center" : ""
         }`}
       >
-        <div
+        <a
+          href="/profile"
+          onClick={(e) => {
+            e.preventDefault();
+            // Close mobile sidebar before navigating
+            if (isMobile) {
+              setIsMobileOpen(false);
+            }
+            router.push("/profile");
+          }}
           className={`flex items-center gap-3 ${
             isShrunk ? "justify-center" : ""
-          }`}
+          } hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg p-2 transition-colors`}
+          aria-label="Profile"
         >
-          {/* Replaced Next.js Image with standard <img> tag */}
           <Image
-            src={user.avatarUrl}
-            alt={user.name}
+            src={session?.user?.image || "https://avatar.vercel.sh/user.png"}
+            alt={session?.user?.name || "User"}
             className="w-10 h-10 rounded-full shrink-0"
             width={40}
             height={40}
@@ -283,13 +386,13 @@ function SidebarContent({
             className="overflow-hidden"
           >
             <p className="font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-              {user.name}
+              {getDisplayName()}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">
               {role}
             </p>
           </motion.div>
-        </div>
+        </a>
       </div>
     </div>
   );
@@ -325,7 +428,7 @@ export default function Sidebar(props: SidebarProps) {
         transition={{ type: "tween", duration: 0.3, ease: "easeInOut" }}
         className="fixed inset-y-0 left-0 z-50 flex w-60 flex-col bg-white dark:bg-gray-950 border-r dark:border-gray-800 p-6 md:hidden"
       >
-        <SidebarContent {...props} isShrunk={false} />
+        <SidebarContent {...props} isShrunk={false} isMobile={true} />
       </motion.aside>
 
       {/* --- Desktop Sidebar (Fixed) --- */}
@@ -334,7 +437,7 @@ export default function Sidebar(props: SidebarProps) {
         transition={{ type: "tween", duration: 0.3, ease: "easeInOut" }}
         className="hidden md:flex flex-col fixed inset-y-0 left-0 z-30 min-h-screen bg-white dark:bg-gray-950 border-r dark:border-gray-800 p-6"
       >
-        <SidebarContent {...props} />
+        <SidebarContent {...props} isMobile={false} />
 
         <motion.button
           onClick={() => setIsShrunk(!isShrunk)}

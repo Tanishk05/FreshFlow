@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { motion } from "framer-motion";
-import { WarehouseItem } from "@/lib/data/types";
+import { WarehouseInventory } from "@/models/WarehouseInventory";
 import { Thermometer } from "lucide-react";
 import { FormattedDate } from "@/components/dashboard/FormattedDate"; // Assuming this exists
 
@@ -11,10 +11,10 @@ const itemVariants = {
 };
 
 type Props = {
-  stock: WarehouseItem[];
+  stock: WarehouseInventory[];
 };
 
-export default function WarehouseInventory({ stock }: Props) {
+export default function WarehouseInventoryComponent({ stock }: Props) {
   return (
     <motion.section
       id="warehouse"
@@ -37,7 +37,7 @@ export default function WarehouseInventory({ stock }: Props) {
           <tbody>
             {stock.map((item) => (
               <tr
-                key={item.id}
+                key={item._id?.toString()}
                 className="border-b border-gray-200 dark:border-gray-700 last:border-b-0"
               >
                 <td className="py-4 pr-3">
@@ -64,7 +64,7 @@ export default function WarehouseInventory({ stock }: Props) {
                   </span>
                 </td>
                 <td className="py-4 pl-3 text-gray-600 dark:text-gray-300">
-                  <FormattedDate dateString={item.receivedDate} />
+                  <FormattedDate dateString={item.receivedDate.toISOString()} />
                 </td>
               </tr>
             ))}

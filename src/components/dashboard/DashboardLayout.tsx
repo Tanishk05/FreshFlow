@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { motion } from "framer-motion";
+import NotificationManager from "@/components/notifications/NotificationManager";
 
 export default function DashboardLayout({
   children,
@@ -18,6 +19,7 @@ export default function DashboardLayout({
       >
         {children}
       </motion.div>
+      <NotificationManager />
     </div>
   );
 }

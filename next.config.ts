@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  reactStrictMode: false, // Disable in dev to reduce duplicate server action calls
   images: {
     remotePatterns: [
       {

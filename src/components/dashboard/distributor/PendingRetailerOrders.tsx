@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RetailerOrder } from "@/lib/data/types";
+import { RetailerOrderSerialized } from "@/models/RetailerOrder";
 import { Check } from "lucide-react";
 
 const itemVariants = {
@@ -9,8 +9,12 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
+type OrderWithRetailerName = RetailerOrderSerialized & {
+  retailerName?: string;
+};
+
 type Props = {
-  orders: RetailerOrder[];
+  orders: OrderWithRetailerName[];
   onAssign: (id: string) => void;
 };
 
@@ -22,7 +26,7 @@ export default function PendingRetailerOrders({ orders, onAssign }: Props) {
       className="p-4 md:p-6 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700"
     >
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Pending Retailer Orders
+        Ready for Delivery
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -30,26 +34,26 @@ export default function PendingRetailerOrders({ orders, onAssign }: Props) {
             <AnimatePresence>
               {orders.map((order) => (
                 <motion.tr
-                  key={order.id}
+                  key={order._id}
                   layout
                   className="border-b border-gray-200 dark:border-gray-700 last:border-b-0"
                 >
                   <td className="py-4 pr-3">
                     <p className="font-medium text-gray-900 dark:text-gray-100">
-                      {order.retailerName}
+                      {order.retailerName || "Unknown Retailer"}
                     </p>
                     <p className="text-xs text-gray-500">{order.destination}</p>
                   </td>
                   <td className="py-4 px-3 text-gray-600 dark:text-gray-300">
-                    {order.itemCount} items
+                    {order.items.length} items
                   </td>
                   <td className="py-4 pl-3 text-right">
                     <button
-                      onClick={() => onAssign(order.id)}
+                      onClick={() => onAssign(order._id || "")}
                       className="px-3 py-1 rounded-lg text-sm bg-green-600 text-white hover:bg-green-700 flex items-center gap-1.5"
                     >
                       <Check size={16} />
-                      Assign
+                      Start Delivery
                     </button>
                   </td>
                 </motion.tr>
@@ -58,7 +62,7 @@ export default function PendingRetailerOrders({ orders, onAssign }: Props) {
             {orders.length === 0 && (
               <tr>
                 <td colSpan={3} className="py-8 text-center text-gray-500">
-                  No pending orders to route.
+                  No orders ready for delivery.
                 </td>
               </tr>
             )}

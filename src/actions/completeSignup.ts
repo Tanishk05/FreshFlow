@@ -5,7 +5,7 @@
 import { z, ZodFlattenedError } from "zod";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { ObjectId } from "mongodb"; // We still need this for the query
+import { ObjectId } from "mongodb";
 
 // --- Import our new helper and types ---
 import { getUsersCollection, User, UserRole } from "@/models/User";
@@ -18,6 +18,12 @@ const signupSchema = z.object({
   name: z.string().min(2, "Name is required").optional(),
   username: z.string().min(3, "Username is required").optional(),
   phone: z.string().optional(),
+  street: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  pincode: z.string().optional(),
+  latitude: z.string().optional(),
+  longitude: z.string().optional(),
 });
 
 // --- DEFINE THE STATE SHAPE ---
@@ -49,7 +55,18 @@ export async function completeSignup(
   }
 
   // --- Type-safe data ---
-  const { role, name, username, phone } = result.data;
+  const {
+    role,
+    name,
+    username,
+    phone,
+    street,
+    city,
+    state,
+    pincode,
+    latitude,
+    longitude,
+  } = result.data;
 
   const needsProfileData =
     session.user.provider === "nodemailer" || !session.user.name;
@@ -65,6 +82,37 @@ export async function completeSignup(
     // --- Use the new helper ---
     const usersCollection = await getUsersCollection();
 
+    // Check if username is already taken
+    if (username) {
+      const existingUsername = await usersCollection.findOne({
+        username,
+        _id: { $ne: new ObjectId(session.user.id) },
+      });
+      if (existingUsername) {
+        return {
+          error: "Username already taken. Please choose another.",
+          details: undefined,
+        };
+      }
+    }
+
+    // Check if phone is already in use
+    if (phone) {
+      const existingPhone = await usersCollection.findOne({
+        phone,
+        _id: { $ne: new ObjectId(session.user.id) },
+      });
+      if (existingPhone) {
+        return {
+          error: "Phone number already in use.",
+          details: undefined,
+        };
+      }
+    }
+
+    // Note: Email uniqueness is already handled by NextAuth/MongoDB adapter
+    // during the initial login/signup process
+
     // --- Type-safe update object ---
     const updateData: Partial<User> = {
       role: role as UserRole, // Cast to our defined type
@@ -73,6 +121,19 @@ export async function completeSignup(
     if (name) updateData.name = name;
     if (username) updateData.username = username;
     if (phone) updateData.phone = phone;
+
+    // Build address object if any address field is provided
+    if (street || city || state || pincode || latitude || longitude) {
+      updateData.address = {
+        street: street || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        pincode: pincode || undefined,
+        country: "India", // Default country
+        latitude: latitude ? parseFloat(latitude) : undefined,
+        longitude: longitude ? parseFloat(longitude) : undefined,
+      };
+    }
 
     await usersCollection.updateOne(
       { _id: new ObjectId(session.user.id) },
@@ -86,6 +147,6 @@ export async function completeSignup(
     };
   }
 
-  // Successful update, redirect
-  redirect(`/dashboards/${role}`);
+  // Successful update, redirect to the new dashboard route
+  redirect(`/dashboard/${role}`);
 }

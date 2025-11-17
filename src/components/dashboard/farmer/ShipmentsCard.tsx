@@ -1,6 +1,5 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Shipment } from "@/lib/data/farmerMockData";
 import { AlertTriangle, Ship, Thermometer } from "lucide-react";
 
 const itemVariants = {
@@ -8,8 +7,17 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
+type ShipmentFromDB = {
+  _id: string;
+  origin: string;
+  destination: string;
+  status: "in-transit" | "delivered" | "delayed";
+  temperatureC: number;
+  eta: Date;
+};
+
 type Props = {
-  shipments: Shipment[];
+  shipments: ShipmentFromDB[];
 };
 
 export default function ShipmentsCard({ shipments }: Props) {
@@ -33,7 +41,7 @@ export default function ShipmentsCard({ shipments }: Props) {
           const isHot = shipment.temperatureC > 6;
           return (
             <div
-              key={shipment.id}
+              key={shipment._id}
               className={`flex items-start gap-3 p-4 rounded-lg ${
                 isDelayed || isHot
                   ? "bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800"
@@ -56,7 +64,7 @@ export default function ShipmentsCard({ shipments }: Props) {
                   {shipment.destination}
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Shipment {shipment.id}
+                  {shipment.origin} → {shipment.destination}
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <Thermometer

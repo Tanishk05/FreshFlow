@@ -1,12 +1,20 @@
 "use client";
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { StoreItem } from "@/lib/data/types";
 import { ArchiveX } from "lucide-react";
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0 },
+};
+
+type StoreItem = {
+  _id: string;
+  name: string;
+  stock: number;
+  reorderPoint: number;
+  shelfLifeDays: number;
+  status: "fresh" | "expiring" | "spoiled";
 };
 
 type Props = {
@@ -40,7 +48,7 @@ export default function StoreInventory({ inventory, onMarkSpoiled }: Props) {
                 .filter((item) => item.status !== "spoiled")
                 .map((item) => (
                   <motion.tr
-                    key={item.id}
+                    key={item._id}
                     layout
                     className="border-b border-gray-200 dark:border-gray-700 last:border-b-0"
                   >
@@ -60,7 +68,7 @@ export default function StoreInventory({ inventory, onMarkSpoiled }: Props) {
                     </td>
                     <td className="py-4 pl-3 text-right">
                       <button
-                        onClick={() => onMarkSpoiled(item.id)}
+                        onClick={() => onMarkSpoiled(item._id)}
                         className="text-gray-400 hover:text-red-600 dark:hover:text-red-500 transition-colors"
                         aria-label="Mark as spoiled"
                       >
@@ -70,6 +78,15 @@ export default function StoreInventory({ inventory, onMarkSpoiled }: Props) {
                   </motion.tr>
                 ))}
             </AnimatePresence>
+            {inventory.filter((item) => item.status !== "spoiled").length ===
+              0 && (
+              <tr>
+                <td colSpan={4} className="py-8 text-center text-gray-500">
+                  No inventory items. Add items from the marketplace or purchase
+                  orders.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

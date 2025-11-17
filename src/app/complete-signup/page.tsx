@@ -50,6 +50,13 @@ export default function CompleteSignupPage() {
   // --- Changed from useFormState to useActionState ---
   const [state, formAction] = useActionState(completeSignup, initialState);
 
+  // Redirect if user already has a role
+  React.useEffect(() => {
+    if (status === "authenticated" && session?.user?.role) {
+      router.push(`/dashboard/${session.user.role}`);
+    }
+  }, [status, session?.user?.role, router]);
+
   if (status === "loading") {
     return <div className="p-8">Loading session...</div>;
   }
@@ -57,6 +64,11 @@ export default function CompleteSignupPage() {
   if (status === "unauthenticated") {
     router.push("/"); // Send them home
     return null;
+  }
+
+  // If user already has a role, show loading while redirecting
+  if (session?.user?.role) {
+    return <div className="p-8">Redirecting to dashboard...</div>;
   }
 
   // Check if user *needs* to fill in name/username
@@ -153,7 +165,7 @@ export default function CompleteSignupPage() {
               id="phone"
               name="phone"
               type="tel"
-              placeholder="+1 555 123 4567"
+              placeholder="+91 98765 43210"
             />
             {/* --- ADDED FIELD-SPECIFIC ERROR --- */}
             {state.details?.fieldErrors?.phone && (
@@ -161,6 +173,75 @@ export default function CompleteSignupPage() {
                 {state.details.fieldErrors.phone.join(", ")}
               </p>
             )}
+          </div>
+
+          {/* Address Fields (Optional) */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-gray-700">
+              Address (Optional - helps calculate delivery distance)
+            </h3>
+
+            <div>
+              <Label htmlFor="street">Street Address</Label>
+              <Input
+                id="street"
+                name="street"
+                type="text"
+                placeholder="123 Main St"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="city">City</Label>
+                <Input id="city" name="city" type="text" placeholder="Mumbai" />
+              </div>
+              <div>
+                <Label htmlFor="state">State</Label>
+                <Input
+                  id="state"
+                  name="state"
+                  type="text"
+                  placeholder="Maharashtra"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="pincode">Pincode</Label>
+              <Input
+                id="pincode"
+                name="pincode"
+                type="text"
+                placeholder="400001"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="latitude">Latitude (Optional)</Label>
+                <Input
+                  id="latitude"
+                  name="latitude"
+                  type="text"
+                  placeholder="19.0760"
+                />
+              </div>
+              <div>
+                <Label htmlFor="longitude">Longitude (Optional)</Label>
+                <Input
+                  id="longitude"
+                  name="longitude"
+                  type="text"
+                  placeholder="72.8777"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              💡 Tip: You can find your coordinates using Google Maps or your
+              GPS location
+            </p>
           </div>
 
           <div>
