@@ -13,6 +13,7 @@ import {
   getMyOrders,
 } from "@/actions/orderActions";
 import { getMyShipments } from "@/actions/shipmentActions";
+import { getFarmerPerformanceMetrics } from "@/actions/performanceActions";
 import { useRouter } from "next/navigation";
 import {
   downloadCSV,
@@ -22,18 +23,12 @@ import {
 
 // Import the new components
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
-import StatsGrid from "@/components/dashboard/farmer/StatsGrid";
 import PendingOrders from "@/components/dashboard/farmer/PendingOrders";
 import CropInventory from "@/components/dashboard/farmer/CropInventory";
 import DemandForecasts from "@/components/dashboard/farmer/DemandForecasts";
 import ShipmentsCard from "@/components/dashboard/farmer/ShipmentsCard";
 import PerformanceCard from "@/components/dashboard/farmer/PerformanceCard";
-import MapCard from "@/components/dashboard/farmer/MapCard";
 import FarmerOrderTracking from "@/components/dashboard/farmer/FarmerOrderTracking";
-
-// 🤖 AI-Powered Components
-import AIInsightsCard from "@/components/dashboard/shared/AIInsightsCard";
-import MarketIntelligenceCard from "@/components/dashboard/shared/MarketIntelligence";
 
 // --- ADDED: Import the new component ---
 import AlertsPanel from "@/components/ui/AlertsPanel";
@@ -68,7 +63,15 @@ type OrderFromDB = {
   unit: string;
   pricePerUnit: number;
   totalPrice: number;
-  status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
+  status:
+    | "pending"
+    | "approved"
+    | "assigned"
+    | "picked-up"
+    | "in-transit"
+    | "delivered"
+    | "rejected"
+    | "cancelled";
   orderDate: Date;
   retailerName?: string;
   deliveryDate?: Date;
@@ -96,6 +99,17 @@ export default function FarmerDashboard() {
   const [produce, setProduce] = useState<Produce[]>([]);
   const [produceLoading, setProduceLoading] = useState(true);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [performanceMetrics, setPerformanceMetrics] = useState<{
+    totalRevenue: number;
+    revenueGrowth: number;
+    fulfillmentRate: number;
+    averageOrderValue: number;
+    totalOrders: number;
+    deliveredOrders: number;
+    activeListings: number;
+    totalQuantitySold: number;
+    topSellingProduce: string;
+  } | null>(null);
 
   // --- HOOKS ---
   const router = useRouter();
@@ -168,9 +182,14 @@ export default function FarmerDashboard() {
         const result = await getMyOrders();
         if (result.success && result.data) {
           const allOrders = result.data as OrderFromDB[];
-          // Filter to show only approved and completed orders
+          // Filter to show approved, assigned, picked-up, in-transit, and delivered orders
           const tracked = allOrders.filter(
-            (o) => o.status === "approved" || o.status === "completed"
+            (o) =>
+              o.status === "approved" ||
+              o.status === "assigned" ||
+              o.status === "picked-up" ||
+              o.status === "in-transit" ||
+              o.status === "delivered"
           );
           setTrackedOrders(tracked);
         }
@@ -182,37 +201,24 @@ export default function FarmerDashboard() {
     fetchTrackedOrders();
   }, []);
 
-  // --- MEMOS (Derived Data) ---
-  // Calculate upcoming harvests from produce (items harvested recently or ready for harvest)
-  const upcomingHarvests = useMemo(() => {
-    const now = new Date();
-    return produce.filter((p) => {
-      const harvestDate = new Date(p.harvestDate);
-      const daysSinceHarvest = Math.floor(
-        (now.getTime() - harvestDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      // Consider items harvested in last 3 days or ready for harvest
-      return daysSinceHarvest <= 3 && p.isAvailable;
-    });
-  }, [produce]);
-
-  const pendingOrders = useMemo(() => orders, [orders]);
-
-  const totalRevenue = useMemo(
-    () =>
-      orders
-        .filter((o) => o.status === "completed")
-        .reduce((sum, o) => sum + o.totalPrice, 0),
-    [orders]
-  );
-
-  const performanceMetrics = useMemo(() => {
-    return {
-      wasteReduction: -22,
-      revenueUplift: 12.4,
-      fulfillmentRate: 97.8,
+  // Fetch performance metrics
+  useEffect(() => {
+    const fetchPerformanceMetrics = async () => {
+      try {
+        const result = await getFarmerPerformanceMetrics();
+        if (result.success && result.data) {
+          setPerformanceMetrics(result.data);
+        }
+      } catch (error) {
+        console.error("Error fetching performance metrics:", error);
+      }
     };
+
+    fetchPerformanceMetrics();
   }, []);
+
+  // --- MEMOS (Derived Data) ---
+  const pendingOrders = useMemo(() => orders, [orders]);
 
   // Convert produce to chart format (quantity in kg)
   const allCropsChartData = useMemo(() => {
@@ -365,119 +371,61 @@ export default function FarmerDashboard() {
           />
 
           {/* --- RESPONSIVE CONTENT AREA --- */}
-          <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto">
-            {/* Hero Section - AI + Agriculture Blend */}
-            <div className="mb-6">
-              <div className="relative rounded-2xl overflow-hidden bg-linear-to-br from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 border border-green-200 dark:border-green-800">
-                <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10"></div>
-                <div className="relative p-6 md:p-8">
-                  <div className="flex items-start justify-between flex-wrap gap-4">
-                    <div className="flex-1 min-w-[200px]">
-                      <h2 className="text-3xl font-bold bg-linear-to-r from-green-700 to-emerald-600 dark:from-green-400 dark:to-emerald-400 bg-clip-text text-transparent mb-2">
-                        Farm Intelligence Hub
-                      </h2>
-                      <p className="text-gray-600 dark:text-gray-400">
-                        AI-powered insights for smarter farming
-                      </p>
-                    </div>
-                    <div className="flex gap-3">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => router.push("/my-produce")}
-                        className="px-6 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-medium shadow-lg shadow-green-500/30 flex items-center gap-2"
-                      >
-                        <span>🌱</span> Add Crop
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Priority Section 1: Stats Overview */}
-            <div className="mb-6">
-              <StatsGrid
-                totalRevenue={totalRevenue}
-                pendingOrdersCount={pendingOrders.length}
-                upcomingHarvestsCount={upcomingHarvests.length}
-              />
-            </div>
-
-            {/* Priority Section 2: AI Insights + Market Intelligence Side by Side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* 🤖 AI-Powered Personalized Insights */}
-              <AIInsightsCard
-                role="farmer"
-                dashboardData={{
-                  stats: {
-                    totalCrops: produce.length,
-                    totalRevenue: totalRevenue,
-                    activeOrders: orders.length,
-                    upcomingHarvests: upcomingHarvests.length,
-                  },
-                  recentActivity: [
-                    `Managing ${produce.length} crop${
-                      produce.length !== 1 ? "s" : ""
-                    }`,
-                    `${pendingOrders.length} pending order${
-                      pendingOrders.length !== 1 ? "s" : ""
-                    }`,
-                    `${shipments.length} active shipment${
-                      shipments.length !== 1 ? "s" : ""
-                    }`,
-                    `${upcomingHarvests.length} upcoming harvest${
-                      upcomingHarvests.length !== 1 ? "s" : ""
-                    }`,
-                  ],
-                  inventory: produce,
-                  orders: orders,
-                  performance: {
-                    totalRevenue: totalRevenue,
-                    ordersCompleted: trackedOrders.filter(
-                      (o) => o.status === "completed"
-                    ).length,
-                    activeShipments: shipments.length,
-                  },
-                }}
-              />
-
-              {/* 🤖 AI-Powered Market Intelligence */}
-              <MarketIntelligenceCard
-                userRole="farmer"
-                userProducts={produce.slice(0, 5).map((p) => p.name)}
-              />
-            </div>
-
-            {/* Priority Section 3: Active Orders + Shipments */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+            {/* Priority Section 1: Order Tracking + Pending Orders (Most Important) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+            >
+              <FarmerOrderTracking orders={trackedOrders} />
               <PendingOrders
                 orders={pendingOrders}
                 onApprove={approveOrder}
                 onCancel={cancelOrder}
               />
+            </motion.div>
+
+            {/* Priority Section 2: Live Shipments + Active Orders */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="grid grid-cols-1 gap-6 mb-8"
+            >
               <ShipmentsCard shipments={shipments} />
-            </div>
+            </motion.div>
 
             {/* Secondary Section: Inventory + Performance */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8"
+            >
               <div className="xl:col-span-2">
                 <CropInventory produce={produce} loading={produceLoading} />
               </div>
-              <div className="space-y-6">
-                <PerformanceCard metrics={performanceMetrics} />
-                <MapCard />
+              <div>
+                {performanceMetrics && (
+                  <PerformanceCard metrics={performanceMetrics} />
+                )}
               </div>
-            </div>
+            </motion.div>
 
-            {/* Tertiary Section: Analytics + Tracking */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Tertiary Section: Demand Analytics */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="grid grid-cols-1 gap-6 mb-8"
+            >
               <DemandForecasts
                 allCropsData={allCropsChartData}
                 statusData={statusChartData}
               />
-              <FarmerOrderTracking orders={trackedOrders} />
-            </div>
+            </motion.div>
           </div>
         </motion.main>
       </div>

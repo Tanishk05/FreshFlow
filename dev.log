@@ -1,0 +1,14 @@
+
+> freshflow@0.1.0 dev
+> next dev
+
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.25:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1212ms
+ ○ Compiling / ...
+ GET / 200 in 3.9s (compile: 3.4s, proxy.ts: 253ms, render: 216ms)
+[?25h

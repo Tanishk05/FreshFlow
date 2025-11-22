@@ -123,9 +123,11 @@ export async function assignOrderToTruck(orderId: string, truckId: string) {
     {
       $set: {
         status: "on-route",
-        assignedOrderId: new ObjectId(orderId),
         destination: order.destination,
         updatedAt: new Date(),
+      },
+      $addToSet: {
+        assignedOrderIds: new ObjectId(orderId),
       },
     }
   );
@@ -170,7 +172,7 @@ export async function updateRetailerOrderStatus(
     }
   );
 
-  // If order is delivered, reset truck to available
+  // If order is delivered, reset truck to available and remove order from assignedOrderIds
   if (status === "delivered" && order.assignedTruckId) {
     await fleetCollection.updateOne(
       {
@@ -181,8 +183,10 @@ export async function updateRetailerOrderStatus(
         $set: {
           status: "available",
           destination: undefined,
-          assignedOrderId: undefined,
           updatedAt: new Date(),
+        },
+        $pull: {
+          assignedOrderIds: new ObjectId(orderId),
         },
       }
     );

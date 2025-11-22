@@ -9,22 +9,55 @@ export default function NotificationManager() {
     useState<NotificationPermission>("default");
   const [isSupported, setIsSupported] = useState(false);
 
+  // Check if push notifications should be enabled (feature flag)
+  const pushEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_PUSH_NOTIFICATIONS !== "false";
+
   // Handle mounting and browser-specific initialization
   useEffect(() => {
     // Using queueMicrotask to defer state updates and avoid React Compiler warning
     queueMicrotask(() => {
+      // Skip if push notifications are disabled
+      if (!pushEnabled) {
+        console.log("Push notifications are disabled via feature flag");
+        setMounted(true);
+        return;
+      }
+
       setMounted(true);
 
-      // Check browser support
-      if ("Notification" in window && "serviceWorker" in navigator) {
+      // Check browser support for notifications and service workers
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        "serviceWorker" in navigator &&
+        "PushManager" in window
+      ) {
         setIsSupported(true);
         setPermission(Notification.permission);
+      } else {
+        console.log("Browser does not support push notifications");
       }
     });
-  }, []);
+  }, [pushEnabled]);
 
   const registerServiceWorkerAndSubscribe = useCallback(async () => {
     try {
+      // Check if push notifications are supported
+      if (!("PushManager" in window)) {
+        console.log("Push notifications are not supported in this browser");
+        return;
+      }
+
+      // Get VAPID public key from environment
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        console.log(
+          "VAPID public key not configured - skipping push notifications"
+        );
+        return;
+      }
+
       // Register service worker
       const registration = await navigator.serviceWorker.register("/sw.js");
       console.log("Service Worker registered:", registration);
@@ -32,10 +65,11 @@ export default function NotificationManager() {
       // Wait for service worker to be ready
       await navigator.serviceWorker.ready;
 
-      // Get VAPID public key from environment
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidPublicKey) {
-        console.error("VAPID public key not found");
+      // Check if already subscribed
+      const existingSubscription =
+        await registration.pushManager.getSubscription();
+      if (existingSubscription) {
+        console.log("Already subscribed to push notifications");
         return;
       }
 
@@ -55,7 +89,23 @@ export default function NotificationManager() {
         console.error("Failed to subscribe:", result.error);
       }
     } catch (error) {
-      console.error("Error in notification setup:", error);
+      // Handle specific error types
+      if (error instanceof DOMException) {
+        if (error.name === "AbortError") {
+          console.log(
+            "Push notification registration aborted - service may not be available"
+          );
+        } else if (error.name === "NotAllowedError") {
+          console.log("Push notification permission denied");
+        } else {
+          console.log(
+            `Push notification error (${error.name}): ${error.message}`
+          );
+        }
+      } else {
+        console.log("Error in notification setup:", error);
+      }
+      // Don't throw - just log and continue
     }
   }, []);
 

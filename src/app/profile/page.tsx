@@ -21,29 +21,59 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
-    name: session?.user?.name || "",
-    email: session?.user?.email || "",
+    name: "",
+    email: "",
     username: "",
     phone: "",
-    image: session?.user?.image || "",
+    image: "",
   });
 
-  // When session changes (first load), reset form with latest session values
+  const [initialForm, setInitialForm] = useState({
+    name: "",
+    email: "",
+    username: "",
+    phone: "",
+    image: "",
+  });
+
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user profile data from the API
   useEffect(() => {
-    setForm((f) => ({
-      ...f,
-      name: session?.user?.name || "",
-      email: session?.user?.email || "",
-      image: session?.user?.image || "",
-    }));
-  }, [session?.user?.name, session?.user?.email, session?.user?.image]);
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const data = await res.json();
+          const profileData = {
+            name: data.name || "",
+            email: data.email || "",
+            username: data.username || "",
+            phone: data.phone || "",
+            image: data.image || "",
+          };
+          setForm(profileData);
+          setInitialForm(profileData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (session?.user?.id) {
+      fetchProfile();
+    }
+  }, [session?.user?.id]);
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -60,19 +90,32 @@ export default function ProfilePage() {
     }
 
     setUploading(true);
+    setError("");
 
-    // Convert to base64 for preview and storage
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      setForm((f) => ({ ...f, image: base64String }));
+    try {
+      // Upload to Cloudinary via API
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload-avatar", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Upload failed");
+      }
+
+      const data = await response.json();
+      setForm((f) => ({ ...f, image: data.url }));
+    } catch (err) {
+      console.error("Upload error:", err);
+      setError(err instanceof Error ? err.message : "Failed to upload avatar");
+      alert("Failed to upload avatar. Please try again.");
+    } finally {
       setUploading(false);
-    };
-    reader.onerror = () => {
-      alert("Failed to read image");
-      setUploading(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const removeAvatar = () => {
@@ -84,13 +127,13 @@ export default function ProfilePage() {
 
   const isDirty = useMemo(() => {
     return (
-      form.name !== (session?.user?.name || "") ||
-      form.email !== (session?.user?.email || "") ||
-      form.username !== "" ||
-      form.phone !== "" ||
-      form.image !== (session?.user?.image || "")
+      form.name !== initialForm.name ||
+      form.email !== initialForm.email ||
+      form.username !== initialForm.username ||
+      form.phone !== initialForm.phone ||
+      form.image !== initialForm.image
     );
-  }, [form, session?.user?.name, session?.user?.email, session?.user?.image]);
+  }, [form, initialForm]);
 
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,8 +162,8 @@ export default function ProfilePage() {
       // Refresh session so UI reflects latest values
       await update?.();
       setSaved(true);
-      // Clear username/phone after successful save
-      setForm((f) => ({ ...f, username: "", phone: "" }));
+      // Update initial form to current values after successful save
+      setInitialForm(form);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to update profile");
@@ -169,182 +212,195 @@ export default function ProfilePage() {
                 Profile
               </div>
 
-              <form
-                onSubmit={onSave}
-                className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-              >
-                {/* Left: Avatar and role */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 flex flex-col items-center gap-4">
-                  <div className="relative w-28 h-28 group">
-                    <Image
-                      src={
-                        form.image ||
-                        session?.user?.image ||
-                        "https://avatar.vercel.sh/user.png"
-                      }
-                      alt="Avatar"
-                      width={112}
-                      height={112}
-                      className="rounded-full object-cover w-28 h-28 border-2 border-gray-200 dark:border-gray-700"
-                    />
-                    {uploading && (
-                      <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
-                        <Loader2 className="w-8 h-8 text-white animate-spin" />
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                </div>
+              ) : (
+                <>
+                  <form
+                    onSubmit={onSave}
+                    className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+                  >
+                    {/* Left: Avatar and role */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 flex flex-col items-center gap-4">
+                      <div className="relative w-28 h-28 group">
+                        <Image
+                          src={
+                            form.image ||
+                            session?.user?.image ||
+                            "https://avatar.vercel.sh/user.png"
+                          }
+                          alt="Avatar"
+                          width={112}
+                          height={112}
+                          className="rounded-full object-cover w-28 h-28 border-2 border-gray-200 dark:border-gray-700"
+                        />
+                        {uploading && (
+                          <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 text-white animate-spin" />
+                          </div>
+                        )}
+                        {form.image && !uploading && (
+                          <button
+                            type="button"
+                            onClick={removeAvatar}
+                            className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Remove avatar"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
                       </div>
-                    )}
-                    {form.image && !uploading && (
-                      <button
-                        type="button"
-                        onClick={removeAvatar}
-                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label="Remove avatar"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <div className="w-full">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Profile Picture
-                    </label>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                      id="avatar-upload"
-                    />
-                    <label
-                      htmlFor="avatar-upload"
-                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-500 cursor-pointer transition-colors bg-gray-50 dark:bg-gray-900/40"
-                    >
-                      <Upload size={16} className="text-gray-500" />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        Choose Image
-                      </span>
-                    </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-                      Max 5MB • JPG, PNG, GIF
+                      <div className="w-full">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Profile Picture
+                        </label>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                          id="avatar-upload"
+                        />
+                        <label
+                          htmlFor="avatar-upload"
+                          className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-500 cursor-pointer transition-colors bg-gray-50 dark:bg-gray-900/40"
+                        >
+                          <Upload size={16} className="text-gray-500" />
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Choose Image
+                          </span>
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                          Max 5MB • JPG, PNG, GIF
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
+                          Role
+                        </label>
+                        <input
+                          value={role}
+                          disabled
+                          className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/60 text-gray-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Right: Details */}
+                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow p-6 space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
+                            Full name
+                          </label>
+                          <input
+                            value={form.name || ""}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, name: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                            placeholder="Your name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
+                            Username
+                          </label>
+                          <input
+                            value={form.username || ""}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                username: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                            placeholder="@handle"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
+                            Email
+                          </label>
+                          <input
+                            type="email"
+                            value={form.email || ""}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, email: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                            placeholder="you@example.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
+                            Phone
+                          </label>
+                          <input
+                            value={form.phone || ""}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, phone: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                            placeholder="(+91) 98765 43210"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                        <button
+                          type="submit"
+                          disabled={!isDirty || saving}
+                          className="px-4 py-2 rounded-lg bg-green-600 text-white disabled:opacity-50 inline-flex items-center gap-2"
+                        >
+                          {saving && (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          )}
+                          Save changes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm({
+                              name: session?.user?.name || "",
+                              email: session?.user?.email || "",
+                              username: "",
+                              phone: "",
+                              image: session?.user?.image || "",
+                            });
+                          }}
+                          className="px-4 py-2 rounded-lg border"
+                        >
+                          Cancel
+                        </button>
+                        {saved && (
+                          <span className="text-green-700 inline-flex items-center gap-1 text-sm">
+                            <CheckCircle2 className="w-4 h-4" /> Saved
+                          </span>
+                        )}
+                        {error && (
+                          <span className="text-red-600 dark:text-red-400 text-sm">
+                            {error}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+                    <h2 className="text-xl font-semibold mb-3">Sign out</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                      Sign out from this device.
                     </p>
+                    <SignOutBtn />
                   </div>
-                  <div className="w-full">
-                    <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
-                      Role
-                    </label>
-                    <input
-                      value={role}
-                      disabled
-                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/60 text-gray-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Right: Details */}
-                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow p-6 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
-                        Full name
-                      </label>
-                      <input
-                        value={form.name || ""}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, name: e.target.value }))
-                        }
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                        placeholder="Your name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
-                        Username
-                      </label>
-                      <input
-                        value={form.username || ""}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, username: e.target.value }))
-                        }
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                        placeholder="@handle"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        value={form.email || ""}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, email: e.target.value }))
-                        }
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                        placeholder="you@example.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
-                        Phone
-                      </label>
-                      <input
-                        value={form.phone || ""}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, phone: e.target.value }))
-                        }
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                        placeholder="(+91) 98765 43210"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
-                    <button
-                      type="submit"
-                      disabled={!isDirty || saving}
-                      className="px-4 py-2 rounded-lg bg-green-600 text-white disabled:opacity-50 inline-flex items-center gap-2"
-                    >
-                      {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Save changes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm({
-                          name: session?.user?.name || "",
-                          email: session?.user?.email || "",
-                          username: "",
-                          phone: "",
-                          image: session?.user?.image || "",
-                        });
-                      }}
-                      className="px-4 py-2 rounded-lg border"
-                    >
-                      Cancel
-                    </button>
-                    {saved && (
-                      <span className="text-green-700 inline-flex items-center gap-1 text-sm">
-                        <CheckCircle2 className="w-4 h-4" /> Saved
-                      </span>
-                    )}
-                    {error && (
-                      <span className="text-red-600 dark:text-red-400 text-sm">
-                        {error}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </form>
-
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
-                <h2 className="text-xl font-semibold mb-3">Sign out</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                  Sign out from this device.
-                </p>
-                <SignOutBtn />
-              </div>
+                </>
+              )}
             </div>
           </div>
         </motion.main>

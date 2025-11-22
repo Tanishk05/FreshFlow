@@ -116,6 +116,7 @@ export async function completeSignup(
     // --- Type-safe update object ---
     const updateData: Partial<User> = {
       role: role as UserRole, // Cast to our defined type
+      isAdmin: false, // Set isAdmin to false by default for new users
     };
 
     if (name) updateData.name = name;

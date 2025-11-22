@@ -7,7 +7,12 @@ export interface Shipment {
   orderId?: ObjectId;
   origin: string;
   destination: string;
-  status: "in-transit" | "delivered" | "delayed";
+  status:
+    | "awaiting-pickup"
+    | "picked-up"
+    | "in-transit"
+    | "delivered"
+    | "delayed";
   temperatureC: number;
   eta: Date;
   createdAt: Date;

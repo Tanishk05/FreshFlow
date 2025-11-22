@@ -11,7 +11,6 @@ import {
   Ship,
   Truck, // Icon for Distributor & Retailer Incoming
   Store, // Icon for Retailer
-  Tag, // Icon for Retailer Pricing
   Warehouse, // Icon for Distributor Warehouse
   ShoppingCart, // --- ADDED for Farmer Marketplace
   ListOrdered, // --- ADDED for Distributor Order Book
@@ -35,6 +34,11 @@ const farmerLinks = [
     icon: <Package size={20} />,
   },
   {
+    name: "Orders",
+    href: "/dashboard/farmer/orders",
+    icon: <ClipboardList size={20} />,
+  },
+  {
     name: "Marketplace",
     href: "/marketplace/farmer",
     icon: <ShoppingCart size={20} />,
@@ -48,9 +52,19 @@ const retailerLinks = [
     icon: <LayoutGrid size={20} />,
   },
   {
+    name: "Inventory",
+    href: "/dashboard/retailer/inventory",
+    icon: <Package size={20} />,
+  },
+  {
+    name: "Orders",
+    href: "/dashboard/retailer/orders",
+    icon: <ClipboardList size={20} />,
+  },
+  {
     name: "Buy Produce",
     href: "/marketplace/retailer",
-    icon: <Sprout size={20} />,
+    icon: <ShoppingCart size={20} />,
   },
 ];
 
@@ -61,9 +75,24 @@ const distributorLinks = [
     icon: <LayoutGrid size={20} />,
   },
   {
+    name: "Fleet",
+    href: "/dashboard/distributor/fleet",
+    icon: <Truck size={20} />,
+  },
+  {
+    name: "Warehouse",
+    href: "/dashboard/distributor/warehouse",
+    icon: <Warehouse size={20} />,
+  },
+  {
+    name: "Orders",
+    href: "/dashboard/distributor/orders",
+    icon: <ListOrdered size={20} />,
+  },
+  {
     name: "Order Book",
     href: "/order-book",
-    icon: <ListOrdered size={20} />,
+    icon: <ClipboardList size={20} />,
   },
 ];
 
@@ -80,11 +109,6 @@ const farmerMobileLinks = [
 ];
 
 const retailerMobileLinks = [
-  {
-    name: "AI Pricing",
-    href: "#pricing",
-    icon: <Tag size={20} />,
-  },
   {
     name: "Store Inventory",
     href: "#inventory",
@@ -283,7 +307,7 @@ function SidebarContent({
               }
 
               return (
-                <li key={link.name}>
+                <li key={link.href}>
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
                       {/* Render a real anchor so Radix Tooltip's asChild wraps a DOM node.

@@ -22,24 +22,38 @@ export default {
     },
 
     // This 'jwt' callback adds your custom fields to the token
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger }) {
       // On initial sign-in, add fields from the user object
       if (user) {
         token.id = user.id;
         token.provider = account?.provider;
         const dbUser = user as DbUser;
         token.role = dbUser.role;
+        token.isAdmin = dbUser.isAdmin || false;
+        // IMPORTANT: Strip potentially large fields (like base64 avatar) to keep JWT small
+        if (
+          token.picture &&
+          typeof token.picture === "string" &&
+          token.picture.startsWith("data:image")
+        ) {
+          delete token.picture;
+        }
+        if (
+          token.image &&
+          typeof token.image === "string" &&
+          token.image.startsWith("data:image")
+        ) {
+          delete token.image;
+        }
         return token;
       }
 
-      // If token already has a role, return it (most common case)
-      if (token.role) {
-        return token;
-      }
+      // If trigger is 'update', always fetch fresh data from database
+      // This happens when update() is called manually (e.g., after profile save)
+      const shouldFetchFromDb = trigger === "update" || !token.role;
 
-      // If no role in token but we have an ID, fetch from database
-      // This handles the case where user completed signup and we need to refresh the token
-      if (token.id) {
+      // Fetch from database if needed
+      if (shouldFetchFromDb && token.id) {
         try {
           const usersCollection = await getUsersCollection();
           const dbUser = await usersCollection.findOne({
@@ -47,6 +61,36 @@ export default {
           });
           if (dbUser?.role) {
             token.role = dbUser.role;
+            token.isAdmin = dbUser.isAdmin || false;
+          }
+          // Update name and username from database
+          if (dbUser?.name) {
+            token.name = dbUser.name;
+          }
+          if (dbUser?.username) {
+            token.username = dbUser.username;
+          }
+          // Update avatar URL from database (e.g., after profile update)
+          if (dbUser?.image && typeof dbUser.image === "string") {
+            // Only store Cloudinary URLs or http(s) URLs, not base64
+            if (dbUser.image.startsWith("http")) {
+              token.picture = dbUser.image;
+            }
+          }
+          // Also ensure any large image data fetched later is not persisted in token
+          if (
+            token.picture &&
+            typeof token.picture === "string" &&
+            token.picture.startsWith("data:image")
+          ) {
+            delete token.picture;
+          }
+          if (
+            token.image &&
+            typeof token.image === "string" &&
+            token.image.startsWith("data:image")
+          ) {
+            delete token.image;
           }
         } catch (error) {
           console.error("Error fetching user role:", error);
@@ -62,6 +106,19 @@ export default {
         session.user.id = token.id as string;
         session.user.role = token.role as string | null;
         session.user.provider = token.provider as string;
+        session.user.isAdmin = token.isAdmin as boolean;
+        // Include name and username in session
+        if (token.name && typeof token.name === "string") {
+          session.user.name = token.name;
+        }
+        if (token.username && typeof token.username === "string") {
+          // @ts-expect-error - username is a custom field
+          session.user.username = token.username;
+        }
+        // Ensure image (avatar URL) is included in session
+        if (token.picture && typeof token.picture === "string") {
+          session.user.image = token.picture;
+        }
       }
       return session;
     },

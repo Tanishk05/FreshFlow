@@ -2,12 +2,16 @@
 
 "use client";
 import React, { useState, useEffect } from "react";
-import { User, Loader2, Sprout } from "lucide-react";
+import { motion } from "framer-motion";
+import { User, ShoppingCart, TrendingUp, Package } from "lucide-react";
 import {
   getMarketplaceProduce,
   MarketplaceProduce,
 } from "@/actions/marketplaceActions";
-import Link from "next/link";
+import ModernCard from "@/components/dashboard/shared/ModernCard";
+import LoadingSpinner from "@/components/dashboard/shared/LoadingSpinner";
+import EmptyState from "@/components/dashboard/shared/EmptyState";
+import ActionButton from "@/components/dashboard/shared/ActionButton";
 
 // Emoji mapping for produce categories
 const emojiMap: Record<string, string> = {
@@ -26,8 +30,8 @@ export default function BuyProduce() {
       try {
         setLoading(true);
         const data = await getMarketplaceProduce();
-        // Show only first 4 items
-        setProduce(data.slice(0, 4));
+        // Show only first 5 items
+        setProduce(data.slice(0, 5));
       } catch (error) {
         console.error("Error fetching produce:", error);
       } finally {
@@ -37,89 +41,120 @@ export default function BuyProduce() {
     fetchProduce();
   }, []);
 
-  if (loading) {
-    return (
-      <section id="procurement" className="scroll-mt-20">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-          Buy Produce (From Farmers)
-        </h2>
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin text-emerald-600" size={32} />
-        </div>
-      </section>
-    );
-  }
-
   return (
-    // `id` allows the sidebar link to scroll here
-    <section id="procurement" className="scroll-mt-20">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          Buy Produce (From Farmers)
-        </h2>
-        <Link
-          href="/marketplace/retailer"
-          className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
-        >
-          View All
-        </Link>
-      </div>
-      {produce.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center">
-          <Sprout
-            size={48}
-            className="mx-auto text-gray-300 dark:text-gray-600 mb-3"
-          />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">
-            No produce available
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Check back later for fresh produce from farmers
-          </p>
-        </div>
+    <ModernCard
+      title="Buy Produce"
+      icon={<ShoppingCart className="w-5 h-5" />}
+      gradient="purple"
+      glassEffect
+    >
+      {loading ? (
+        <LoadingSpinner
+          size="lg"
+          color="purple"
+          text="Loading marketplace..."
+        />
+      ) : produce.length === 0 ? (
+        <EmptyState
+          icon={<Package className="w-12 h-12" />}
+          title="No Produce Available"
+          description="Check back later for fresh produce from farmers"
+          action={{
+            label: "Browse Full Marketplace",
+            onClick: () => {
+              window.location.href = "/marketplace/retailer";
+            },
+          }}
+        />
       ) : (
-        <div className="space-y-4">
-          {produce.map((item) => (
-            <div
-              key={item._id}
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-            >
-              <div className="flex items-center gap-4">
-                <div className="shrink-0 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg p-3 h-12 w-12 flex items-center justify-center text-2xl">
-                  {emojiMap[item.category] || "🌱"}
+        <>
+          <div className="space-y-3">
+            {produce.map((item, idx) => (
+              <motion.div
+                key={item._id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                whileHover={{ x: 4 }}
+                className="p-4 rounded-lg bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all"
+              >
+                <div className="flex items-start gap-4">
+                  {/* Produce Icon */}
+                  <div className="shrink-0 bg-linear-to-br from-green-400 to-emerald-500 text-white rounded-lg p-3 h-14 w-14 flex items-center justify-center text-2xl shadow-lg">
+                    {emojiMap[item.category] || "🌱"}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+                          {item.name}
+                        </h4>
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                          <User className="w-4 h-4" />
+                          <span>{item.farmerName}</span>
+                        </div>
+                      </div>
+
+                      {/* Price Badge */}
+                      <div className="shrink-0 text-right">
+                        <div className="text-xl font-bold text-gray-900 dark:text-white">
+                          ₹{item.pricePerUnit.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          per {item.unit}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="flex items-center gap-1.5">
+                        <Package className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          {item.quantity} {item.unit} available
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          Fresh
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Button */}
+                    <ActionButton
+                      variant="success"
+                      size="sm"
+                      fullWidth
+                      onClick={() => {
+                        window.location.href = "/marketplace/retailer";
+                      }}
+                    >
+                      Create Purchase Order
+                    </ActionButton>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white">
-                    {item.name}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-                    <User size={14} /> {item.farmerName}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                <div className="text-left sm:text-right">
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">
-                    ₹{item.pricePerUnit.toFixed(2)}
-                    <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-                      /{item.unit}
-                    </span>
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {item.quantity} {item.unit} available
-                  </p>
-                </div>
-                <Link
-                  href="/marketplace/retailer"
-                  className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors text-center"
-                >
-                  Create PO
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* View All Link */}
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="mt-4 w-full py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+            onClick={() => {
+              window.location.href = "/marketplace/retailer";
+            }}
+          >
+            View Full Marketplace →
+          </motion.button>
+        </>
       )}
-    </section>
+    </ModernCard>
   );
 }

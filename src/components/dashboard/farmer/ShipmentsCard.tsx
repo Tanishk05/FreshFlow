@@ -1,11 +1,8 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, Ship, Thermometer } from "lucide-react";
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
-};
+import ModernCard from "../shared/ModernCard";
+import EmptyState from "../shared/EmptyState";
 
 type ShipmentFromDB = {
   _id: string;
@@ -22,79 +19,140 @@ type Props = {
 
 export default function ShipmentsCard({ shipments }: Props) {
   return (
-    <motion.section
-      id="shipments"
-      variants={itemVariants}
-      className="p-4 md:p-6 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700"
-    >
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Live Shipments
-        </h3>
-        <button className="text-sm text-gray-500 hover:text-gray-900">
+    <ModernCard
+      title="Live Shipments"
+      icon={<Ship className="w-5 h-5" />}
+      gradient="blue"
+      glassEffect={false}
+      headerAction={
+        <button className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors">
           View All
         </button>
-      </div>
-      <div className="space-y-4">
-        {shipments.map((shipment) => {
-          const isDelayed = shipment.status === "delayed";
-          const isHot = shipment.temperatureC > 6;
-          return (
-            <div
-              key={shipment._id}
-              className={`flex items-start gap-3 p-4 rounded-lg ${
-                isDelayed || isHot
-                  ? "bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800"
-                  : "bg-gray-50 dark:bg-gray-800/50"
-              }`}
-            >
-              {isDelayed || isHot ? (
-                <AlertTriangle className="text-red-600 dark:text-red-400 shrink-0 mt-1" />
-              ) : (
-                <Ship className="text-blue-500 shrink-0 mt-1" />
-              )}
-              <div className="flex-1">
-                <p
-                  className={`font-medium ${
-                    isDelayed || isHot
-                      ? "text-red-800 dark:text-red-200"
-                      : "text-gray-800 dark:text-gray-200"
-                  }`}
-                >
-                  {shipment.destination}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {shipment.origin} → {shipment.destination}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <Thermometer
-                    size={14}
-                    className={isHot ? "text-red-500" : "text-gray-500"}
-                  />
-                  <span
-                    className={`text-sm ${
-                      isHot
-                        ? "text-red-500 font-medium"
-                        : "text-gray-500 dark:text-gray-400"
-                    }`}
-                  >
-                    {shipment.temperatureC}°C
-                  </span>
-                </div>
-              </div>
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                  isDelayed
-                    ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                    : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+      }
+    >
+      {shipments.length === 0 ? (
+        <EmptyState
+          icon="📦"
+          title="No active shipments"
+          description="Your shipments will appear here when orders are being delivered"
+        />
+      ) : (
+        <div className="space-y-3">
+          {shipments.map((shipment, idx) => {
+            const isDelayed = shipment.status === "delayed";
+            const isHot = shipment.temperatureC > 6;
+            const hasAlert = isDelayed || isHot;
+
+            return (
+              <motion.div
+                key={shipment._id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                whileHover={{ x: 4 }}
+                className={`relative p-4 rounded-2xl backdrop-blur-sm border transition-all ${
+                  hasAlert
+                    ? "bg-red-50/80 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                    : "bg-white/60 dark:bg-gray-800/60 border-white/30 dark:border-gray-700/30 hover:shadow-md"
                 }`}
               >
-                {shipment.status}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </motion.section>
+                {/* Alert Badge */}
+                {hasAlert && (
+                  <div className="absolute -top-2 -right-2">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold animate-pulse">
+                      !
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-4">
+                  {/* Icon */}
+                  <div
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                      hasAlert
+                        ? "bg-red-100 dark:bg-red-900/30"
+                        : "bg-blue-100 dark:bg-blue-900/30"
+                    }`}
+                  >
+                    {hasAlert ? (
+                      <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                    ) : (
+                      <Ship className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h4
+                          className={`font-bold ${
+                            hasAlert
+                              ? "text-red-800 dark:text-red-200"
+                              : "text-gray-900 dark:text-white"
+                          }`}
+                        >
+                          {shipment.destination}
+                        </h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          📍 {shipment.origin} → {shipment.destination}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                          shipment.status === "delivered"
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                            : shipment.status === "delayed"
+                            ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                            : "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                        }`}
+                      >
+                        {shipment.status}
+                      </span>
+                    </div>
+
+                    {/* Temperature */}
+                    <div className="flex items-center gap-2 mt-3">
+                      <div
+                        className={`flex items-center gap-1 px-3 py-1 rounded-lg ${
+                          isHot
+                            ? "bg-red-100 dark:bg-red-900/30"
+                            : "bg-gray-100 dark:bg-gray-700"
+                        }`}
+                      >
+                        <Thermometer
+                          size={16}
+                          className={isHot ? "text-red-500" : "text-gray-500"}
+                        />
+                        <span
+                          className={`text-sm font-semibold ${
+                            isHot
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-gray-600 dark:text-gray-300"
+                          }`}
+                        >
+                          {shipment.temperatureC}°C
+                        </span>
+                      </div>
+
+                      {isHot && (
+                        <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                          ⚠️ Temperature Alert
+                        </span>
+                      )}
+                    </div>
+
+                    {/* ETA */}
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      ETA: {new Date(shipment.eta).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </ModernCard>
   );
 }

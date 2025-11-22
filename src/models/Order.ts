@@ -5,8 +5,11 @@ import { ObjectId, Db } from "mongodb";
 export type OrderStatus =
   | "pending"
   | "approved"
+  | "assigned"
+  | "picked-up"
+  | "in-transit"
+  | "delivered"
   | "rejected"
-  | "completed"
   | "cancelled";
 
 // Define the Order interface
@@ -14,15 +17,22 @@ export interface Order {
   _id?: ObjectId;
   farmerId: ObjectId; // Reference to the farmer who owns the produce
   retailerId?: ObjectId; // Reference to the retailer who placed the order (optional for now)
+  distributorId?: ObjectId; // Reference to the distributor assigned to deliver
   produceId: ObjectId; // Reference to the produce item
   produceName: string;
   quantity: number;
   unit: "kg" | "tons" | "bags";
   pricePerUnit: number;
   totalPrice: number;
+  deliveryFee?: number; // Fee paid to distributor for delivery
+  destination?: string; // Destination city/area
+  deliveryAddress?: string; // Full delivery address
+  distance?: number; // Distance in km
   status: OrderStatus;
   orderDate: Date;
   deliveryDate?: Date;
+  estimatedDelivery?: Date;
+  assignedTruckId?: ObjectId; // Reference to the truck assigned for delivery
   notes?: string;
   createdAt: Date;
   updatedAt: Date;

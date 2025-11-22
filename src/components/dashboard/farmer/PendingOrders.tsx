@@ -1,11 +1,9 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Check, X as XIcon } from "lucide-react";
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
-};
+import ModernCard from "../shared/ModernCard";
+import EmptyState from "../shared/EmptyState";
+import ActionButton from "../shared/ActionButton";
 
 type OrderFromDB = {
   _id: string;
@@ -26,70 +24,81 @@ type Props = {
 
 export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
   return (
-    <motion.section
-      id="orders"
-      variants={itemVariants}
-      className="p-4 md:p-6 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700"
+    <ModernCard
+      title="Pending Orders"
+      icon={<Clock className="w-5 h-5" />}
+      gradient="blue"
+      glassEffect={false}
     >
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Pending Orders
-      </h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <tbody>
-            <AnimatePresence>
-              {orders.map((order) => (
-                <motion.tr
-                  key={order._id}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  layout
-                  className="border-b border-gray-200 dark:border-gray-700 last:border-b-0"
-                >
-                  <td className="py-4 pr-3">
-                    <div className="flex items-center">
-                      <Clock className="w-4 h-4 text-yellow-500 mr-3 shrink-0" />
-                      <span className="text-gray-900 dark:text-gray-100 font-medium">
-                        {order.produceName}
+      {orders.length === 0 ? (
+        <EmptyState
+          icon="✅"
+          title="All caught up!"
+          description="No pending orders at the moment. New orders will appear here."
+        />
+      ) : (
+        <div className="space-y-3">
+          <AnimatePresence>
+            {orders.map((order, idx) => (
+              <motion.div
+                key={order._id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20, transition: { duration: 0.2 } }}
+                transition={{ delay: idx * 0.05 }}
+                whileHover={{ x: 4 }}
+                className="p-4 rounded-2xl bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm border border-white/30 dark:border-gray-700/30 hover:shadow-md transition-all"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900 dark:text-white">
+                          {order.produceName}
+                        </h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {order.quantity} {order.unit} × ₹{order.pricePerUnit}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Total Amount
+                      </span>
+                      <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                        ₹{order.totalPrice.toFixed(2)}
                       </span>
                     </div>
-                  </td>
-                  <td className="py-4 px-3 text-gray-600 dark:text-gray-300">
-                    {order.quantity} {order.unit}
-                  </td>
-                  <td className="py-4 px-3 text-green-600 dark:text-green-400 font-medium">
-                    ₹{order.totalPrice.toFixed(2)}
-                  </td>
-                  <td className="py-4 pl-3 text-right flex gap-2 justify-end">
-                    <button
+                  </div>
+
+                  <div className="flex gap-2">
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => onCancel(order._id)}
-                      className="p-2 rounded-lg text-sm text-gray-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50"
+                      className="p-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                       aria-label="Cancel order"
                     >
-                      <XIcon size={16} />
-                    </button>
-                    <button
+                      <XIcon size={18} />
+                    </motion.button>
+                    <ActionButton
                       onClick={() => onApprove(order._id)}
-                      className="px-3 py-1 rounded-lg text-sm bg-green-600 text-white hover:bg-green-700 flex items-center gap-1.5"
+                      gradient="green"
+                      size="sm"
+                      icon={<Check size={16} />}
                     >
-                      <Check size={16} />
                       Approve
-                    </button>
-                  </td>
-                </motion.tr>
-              ))}
-            </AnimatePresence>
-            {orders.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-8 text-center text-gray-500">
-                  No pending orders.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </motion.section>
+                    </ActionButton>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+    </ModernCard>
   );
 }

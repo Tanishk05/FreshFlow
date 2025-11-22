@@ -27,6 +27,7 @@ export interface User {
   phone?: string | null; // Your custom field
   role?: UserRole | null; // Your custom field
   address?: UserAddress; // Address with coordinates
+  isAdmin?: boolean; // Admin flag
 
   // These are managed by the NextAuth MongoDBAdapter
   // You generally don't need to touch them, but they exist

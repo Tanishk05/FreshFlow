@@ -1,7 +1,34 @@
 "use client";
-import React from "react";
+import React, { Component, ErrorInfo, ReactNode } from "react";
 import { motion } from "framer-motion";
 import NotificationManager from "@/components/notifications/NotificationManager";
+
+// Error boundary for notification manager
+class NotificationErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    console.log("NotificationManager error caught:", error, errorInfo);
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      return null; // Silently fail - notifications are optional
+    }
+
+    return this.props.children;
+  }
+}
 
 export default function DashboardLayout({
   children,
@@ -19,7 +46,9 @@ export default function DashboardLayout({
       >
         {children}
       </motion.div>
-      <NotificationManager />
+      <NotificationErrorBoundary>
+        <NotificationManager />
+      </NotificationErrorBoundary>
     </div>
   );
 }

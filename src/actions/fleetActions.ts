@@ -22,17 +22,24 @@ export async function getMyFleet(): Promise<FleetSerialized[]> {
     .sort({ truckNumber: 1 })
     .toArray();
 
-  return trucks.map((truck) => ({
-    ...truck,
-    _id: truck._id?.toString(),
-    distributorId: truck.distributorId.toString(),
-    assignedOrderIds:
-      truck.assignedOrderIds
-        ?.filter((id) => id !== null)
-        .map((id) => id.toString()) || [],
-    availableCapacityKg: truck.capacityKg - truck.currentLoadKg,
-    loadPercentage: (truck.currentLoadKg / truck.capacityKg) * 100,
-  }));
+  return trucks.map((truck) => {
+    // Destructure to exclude assignedOrderId (old field that may exist in DB)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { assignedOrderId, ...truckData } = truck as Fleet & {
+      assignedOrderId?: ObjectId;
+    };
+    return {
+      ...truckData,
+      _id: truck._id?.toString(),
+      distributorId: truck.distributorId.toString(),
+      assignedOrderIds:
+        truck.assignedOrderIds
+          ?.filter((id) => id !== null)
+          .map((id) => id.toString()) || [],
+      availableCapacityKg: truck.capacityKg - truck.currentLoadKg,
+      loadPercentage: (truck.currentLoadKg / truck.capacityKg) * 100,
+    };
+  });
 }
 
 export async function getTrucksByStatus(
@@ -52,17 +59,24 @@ export async function getTrucksByStatus(
     .sort({ truckNumber: 1 })
     .toArray();
 
-  return trucks.map((truck) => ({
-    ...truck,
-    _id: truck._id?.toString(),
-    distributorId: truck.distributorId.toString(),
-    assignedOrderIds:
-      truck.assignedOrderIds
-        ?.filter((id) => id !== null)
-        .map((id) => id.toString()) || [],
-    availableCapacityKg: truck.capacityKg - truck.currentLoadKg,
-    loadPercentage: (truck.currentLoadKg / truck.capacityKg) * 100,
-  }));
+  return trucks.map((truck) => {
+    // Destructure to exclude assignedOrderId (old field that may exist in DB)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { assignedOrderId, ...truckData } = truck as Fleet & {
+      assignedOrderId?: ObjectId;
+    };
+    return {
+      ...truckData,
+      _id: truck._id?.toString(),
+      distributorId: truck.distributorId.toString(),
+      assignedOrderIds:
+        truck.assignedOrderIds
+          ?.filter((id) => id !== null)
+          .map((id) => id.toString()) || [],
+      availableCapacityKg: truck.capacityKg - truck.currentLoadKg,
+      loadPercentage: (truck.currentLoadKg / truck.capacityKg) * 100,
+    };
+  });
 }
 
 export async function addTruck(data: {
@@ -148,9 +162,11 @@ export async function assignTruckToOrder(truckId: string, orderId: string) {
     },
     {
       $set: {
-        assignedOrderId: new ObjectId(orderId),
         status: "on-route",
         updatedAt: new Date(),
+      },
+      $addToSet: {
+        assignedOrderIds: new ObjectId(orderId),
       },
     }
   );

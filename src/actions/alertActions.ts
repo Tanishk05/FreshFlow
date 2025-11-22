@@ -311,29 +311,54 @@ export async function getMyAlerts(): Promise<Alert[]> {
       return [];
   }
 
-  // Create notifications for new alerts
-  await processNewAlerts(userId, alerts);
+  // Create notifications for new alerts and send email
+  await processNewAlerts(userId, alerts, session);
 
   return alerts;
 }
 
-// Process new alerts and create notifications
+// Process new alerts and create notifications + send emails
 async function processNewAlerts(
   userId: ObjectId,
-  alerts: Alert[]
+  alerts: Alert[],
+  session: {
+    user?: {
+      email?: string | null;
+      name?: string | null;
+      role?: string | null;
+    };
+  }
 ): Promise<void> {
   try {
+    // Import notification and email services
     const { createNotification } = await import(
       "@/actions/notificationActions"
     );
+    const { sendAlertEmail } = await import("@/lib/email");
 
     // Create notifications for critical and warning alerts
     const importantAlerts = alerts.filter(
       (alert) => alert.type === "critical" || alert.type === "warning"
     );
 
+    // Send in-app notifications
     for (const alert of importantAlerts) {
       await createNotification(userId, alert);
+    }
+
+    // Send email notification if user has email and there are important alerts
+    if (
+      importantAlerts.length > 0 &&
+      session.user?.email &&
+      session.user?.name &&
+      session.user?.role
+    ) {
+      await sendAlertEmail(
+        session.user.email,
+        session.user.name,
+        session.user.role,
+        importantAlerts
+      );
     }
   } catch (error) {
     console.error("Error processing new alerts:", error);

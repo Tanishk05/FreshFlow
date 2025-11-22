@@ -11,6 +11,38 @@ const profileUpdateSchema = z.object({
   image: z.string().optional(), // Can be URL or base64
 });
 
+export async function GET() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    const users = await getUsersCollection();
+    const userId = new ObjectId(session.user.id);
+
+    const user = await users.findOne({ _id: userId });
+
+    if (!user) {
+      return new Response("User not found", { status: 404 });
+    }
+
+    // Return user profile data
+    return Response.json({
+      name: user.name || "",
+      email: user.email || "",
+      username: user.username || "",
+      phone: user.phone || "",
+      image: user.image || "",
+      role: user.role || "",
+      isAdmin: user.isAdmin || false,
+    });
+  } catch (err) {
+    console.error("Profile fetch error", err);
+    return new Response("Server error", { status: 500 });
+  }
+}
+
 export async function PATCH(request: Request) {
   try {
     const session = await auth();

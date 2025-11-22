@@ -3,11 +3,9 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FormattedDate } from "@/components/dashboard/FormattedDate";
 import { useRouter } from "next/navigation";
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
-};
+import ModernCard from "../shared/ModernCard";
+import LoadingSpinner from "../shared/LoadingSpinner";
+import EmptyState from "../shared/EmptyState";
 
 type Produce = {
   _id: string;
@@ -35,99 +33,131 @@ export default function CropInventory({
   const router = useRouter();
 
   return (
-    <motion.section
-      id="manage"
-      variants={itemVariants}
-      className="p-4 md:p-6 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700"
+    <ModernCard
+      title="Crop Inventory"
+      icon={<span className="text-2xl">🌾</span>}
+      gradient="blue"
+      glassEffect={false}
+      headerAction={
+        <button
+          onClick={() => router.push("/my-produce")}
+          className="px-4 py-2 rounded-xl text-sm bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors shadow-md"
+        >
+          View All
+        </button>
+      }
     >
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Crop Inventory
-        </h3>
-        <div className="flex gap-2">
-          <button
-            onClick={() => router.push("/my-produce")}
-            className="px-3 py-1 rounded-lg text-sm bg-green-50 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/70 transition-colors"
-          >
-            View All
-          </button>
-        </div>
-      </div>
-
       {loading ? (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <div className="flex justify-center py-12">
+          <LoadingSpinner size="lg" color="green" text="Loading crops..." />
         </div>
       ) : produce.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          <p>No produce items yet.</p>
-          <button
-            onClick={() => router.push("/my-produce")}
-            className="mt-2 text-green-600 dark:text-green-400 hover:underline"
-          >
-            Add your first produce →
-          </button>
-        </div>
+        <EmptyState
+          icon="🌱"
+          title="No crops yet"
+          description="Start by adding your first produce to the inventory"
+          action={{
+            label: "Add Produce",
+            onClick: () => router.push("/my-produce"),
+          }}
+        />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <th className="text-left py-3 px-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  Crop
+                </th>
+                <th className="text-left py-3 px-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  Quantity
+                </th>
+                <th className="text-left py-3 px-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  Harvest Date
+                </th>
+                <th className="text-left py-3 px-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  Status
+                </th>
+                <th className="text-right py-3 px-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  Price
+                </th>
+              </tr>
+            </thead>
             <tbody>
               <AnimatePresence>
-                {produce.slice(0, 5).map((item) => (
+                {produce.slice(0, 5).map((item, idx) => (
                   <motion.tr
                     key={item._id}
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{
-                      opacity: 0,
-                      x: -20,
-                      transition: { duration: 0.2 },
-                    }}
-                    layout
-                    className="border-b border-gray-200 dark:border-gray-700 last:border-b-0"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
+                    transition={{ delay: idx * 0.05 }}
+                    whileHover={{ backgroundColor: "rgba(16, 185, 129, 0.05)" }}
+                    className="border-b border-gray-200 dark:border-gray-700 last:border-b-0 cursor-pointer"
                   >
-                    <td className="py-4 pr-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{item.image}</span>
+                    <td className="py-4 px-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">{item.image}</span>
                         <div>
-                          <span className="text-gray-900 dark:text-gray-100 font-medium">
+                          <div className="text-gray-900 dark:text-gray-100 font-semibold">
                             {item.name}
-                          </span>
-                          <span className="text-gray-500 ml-2 text-xs capitalize">
+                          </div>
+                          <div className="text-gray-500 dark:text-gray-400 text-xs capitalize">
                             {item.category}
-                          </span>
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-3 text-gray-600 dark:text-gray-300">
-                      {item.quantity} {item.unit}
+                    <td className="py-4 px-2">
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {item.quantity} {item.unit}
+                      </span>
                     </td>
-                    <td className="py-4 px-3 text-gray-600 dark:text-gray-300">
+                    <td className="py-4 px-2 text-gray-600 dark:text-gray-300">
                       <FormattedDate dateString={item.harvestDate} />
                     </td>
-                    <td className="py-4 px-3">
+                    <td className="py-4 px-2">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
                           item.isAvailable
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                            : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                         }`}
                       >
-                        {item.isAvailable ? "Available" : "Out of Stock"}
+                        {item.isAvailable ? "✓ Available" : "○ Out of Stock"}
                       </span>
                     </td>
-                    <td className="py-4 pl-3 text-right">
-                      <span className="text-green-600 dark:text-green-400 font-semibold">
-                        ₹{item.pricePerUnit}/{item.unit}
-                      </span>
+                    <td className="py-4 px-2 text-right">
+                      <div className="font-bold text-green-600 dark:text-green-400">
+                        ₹{item.pricePerUnit}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        per {item.unit}
+                      </div>
                     </td>
                   </motion.tr>
                 ))}
               </AnimatePresence>
             </tbody>
           </table>
+
+          {produce.length > 5 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="mt-4 text-center"
+            >
+              <button
+                onClick={() => router.push("/my-produce")}
+                className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium text-sm transition-colors"
+              >
+                + View {produce.length - 5} more crops
+              </button>
+            </motion.div>
+          )}
         </div>
       )}
-    </motion.section>
+    </ModernCard>
   );
 }

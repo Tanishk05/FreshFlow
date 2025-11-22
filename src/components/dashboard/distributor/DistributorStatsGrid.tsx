@@ -1,13 +1,6 @@
 "use client";
 import React from "react";
-import { motion } from "framer-motion";
-import SmallStat from "@/components/dashboard/SmallStat"; // Assuming this exists
-import { Package, Truck, Warehouse } from "lucide-react";
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
-};
+import EnhancedStatCard from "../shared/EnhancedStatCard";
 
 type Props = {
   pendingOrdersCount: number;
@@ -21,28 +14,33 @@ export default function DistributorStatsGrid({
   warehouseCapacity,
 }: Props) {
   return (
-    <motion.div
-      variants={itemVariants}
-      className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-    >
-      <SmallStat
-        label="Pending Orders"
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+      <EnhancedStatCard
+        title="Pending Orders"
         value={pendingOrdersCount}
-        sublabel="To be routed"
-        icon={<Package className="text-yellow-500" />}
+        icon="📦"
+        color="orange"
+        subtitle="To be routed"
+        delay={0}
       />
-      <SmallStat
-        label="Trucks on Road"
+      <EnhancedStatCard
+        title="Trucks on Road"
         value={trucksOnRoadCount}
-        sublabel="Live tracking"
-        icon={<Truck className="text-blue-500" />}
+        icon="🚚"
+        color="blue"
+        trend={{ value: 8, isPositive: true }}
+        subtitle="Live tracking"
+        delay={0.1}
       />
-      <SmallStat
-        label="Warehouse"
+      <EnhancedStatCard
+        title="Warehouse"
         value={`${warehouseCapacity}%`}
-        sublabel="Capacity full"
-        icon={<Warehouse className="text-green-500" />}
+        icon="🏭"
+        color="green"
+        trend={{ value: 5, isPositive: false }}
+        subtitle="Capacity"
+        delay={0.2}
       />
-    </motion.div>
+    </div>
   );
 }

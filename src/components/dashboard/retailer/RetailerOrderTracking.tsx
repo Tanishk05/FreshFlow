@@ -24,7 +24,16 @@ type FarmerOrderTracking = {
   unit: string;
   pricePerUnit: number;
   totalPrice: number;
-  status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
+  status:
+    | "pending"
+    | "approved"
+    | "assigned"
+    | "picked-up"
+    | "in-transit"
+    | "delivered"
+    | "rejected"
+    | "completed"
+    | "cancelled";
   orderDate: Date;
   deliveryDate?: Date;
   retailerName?: string;
@@ -49,7 +58,21 @@ const getStatusInfo = (status: string) => {
         icon: CheckCircle2,
         color: "text-blue-500",
         bg: "bg-blue-100 dark:bg-blue-900/30",
-        label: "Approved",
+        label: "Awaiting Distributor",
+      };
+    case "assigned":
+      return {
+        icon: Truck,
+        color: "text-indigo-500",
+        bg: "bg-indigo-100 dark:bg-indigo-900/30",
+        label: "Distributor Assigned",
+      };
+    case "picked-up":
+      return {
+        icon: Package,
+        color: "text-purple-500",
+        bg: "bg-purple-100 dark:bg-purple-900/30",
+        label: "Picked Up",
       };
     case "in-transit":
       return {
@@ -58,6 +81,7 @@ const getStatusInfo = (status: string) => {
         bg: "bg-orange-100 dark:bg-orange-900/30",
         label: "In Transit",
       };
+    case "delivered":
     case "completed":
       return {
         icon: CheckCircle2,
@@ -249,6 +273,10 @@ export default function RetailerOrderTracking({ orders }: Props) {
                                 <div
                                   className={`w-8 h-8 rounded-full ${
                                     order.status === "approved" ||
+                                    order.status === "assigned" ||
+                                    order.status === "picked-up" ||
+                                    order.status === "in-transit" ||
+                                    order.status === "delivered" ||
                                     order.status === "completed"
                                       ? "bg-green-500"
                                       : order.status === "pending"
@@ -257,6 +285,10 @@ export default function RetailerOrderTracking({ orders }: Props) {
                                   } flex items-center justify-center`}
                                 >
                                   {order.status === "approved" ||
+                                  order.status === "assigned" ||
+                                  order.status === "picked-up" ||
+                                  order.status === "in-transit" ||
+                                  order.status === "delivered" ||
                                   order.status === "completed" ? (
                                     <CheckCircle2
                                       size={16}
@@ -279,6 +311,10 @@ export default function RetailerOrderTracking({ orders }: Props) {
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {order.status === "approved" ||
+                                  order.status === "assigned" ||
+                                  order.status === "picked-up" ||
+                                  order.status === "in-transit" ||
+                                  order.status === "delivered" ||
                                   order.status === "completed"
                                     ? "Order approved by farmer"
                                     : order.status === "pending"
@@ -288,17 +324,74 @@ export default function RetailerOrderTracking({ orders }: Props) {
                               </div>
                             </div>
 
+                            {/* Distributor Assignment */}
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div
+                                  className={`w-8 h-8 rounded-full ${
+                                    order.status === "assigned" ||
+                                    order.status === "picked-up" ||
+                                    order.status === "in-transit" ||
+                                    order.status === "delivered" ||
+                                    order.status === "completed"
+                                      ? "bg-indigo-500"
+                                      : order.status === "approved"
+                                      ? "bg-yellow-500"
+                                      : "bg-gray-300 dark:bg-gray-600"
+                                  } flex items-center justify-center`}
+                                >
+                                  {order.status === "assigned" ||
+                                  order.status === "picked-up" ||
+                                  order.status === "in-transit" ||
+                                  order.status === "delivered" ||
+                                  order.status === "completed" ? (
+                                    <Truck size={16} className="text-white" />
+                                  ) : order.status === "approved" ? (
+                                    <Clock size={16} className="text-white" />
+                                  ) : (
+                                    <Clock
+                                      size={16}
+                                      className="text-gray-500"
+                                    />
+                                  )}
+                                </div>
+                                <div className="w-0.5 h-8 bg-gray-300 dark:bg-gray-600"></div>
+                              </div>
+                              <div className="pb-4">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                  Distributor Assignment
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {order.status === "assigned" ||
+                                  order.status === "picked-up" ||
+                                  order.status === "in-transit" ||
+                                  order.status === "delivered" ||
+                                  order.status === "completed"
+                                    ? "Distributor assigned to deliver"
+                                    : order.status === "approved"
+                                    ? "Waiting for distributor to accept"
+                                    : "Waiting for farmer approval first"}
+                                </p>
+                              </div>
+                            </div>
+
                             {/* Out for Delivery */}
                             <div className="flex gap-3">
                               <div className="flex flex-col items-center">
                                 <div
                                   className={`w-8 h-8 rounded-full ${
+                                    order.status === "picked-up" ||
+                                    order.status === "in-transit" ||
+                                    order.status === "delivered" ||
                                     order.status === "completed"
                                       ? "bg-orange-500"
                                       : "bg-gray-300 dark:bg-gray-600"
                                   } flex items-center justify-center`}
                                 >
-                                  {order.status === "completed" ? (
+                                  {order.status === "picked-up" ||
+                                  order.status === "in-transit" ||
+                                  order.status === "delivered" ||
+                                  order.status === "completed" ? (
                                     <Truck size={16} className="text-white" />
                                   ) : (
                                     <Clock
@@ -314,7 +407,12 @@ export default function RetailerOrderTracking({ orders }: Props) {
                                   Out for Delivery
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {order.status === "completed"
+                                  {order.status === "picked-up"
+                                    ? "Order picked up"
+                                    : order.status === "in-transit"
+                                    ? "In transit to your location"
+                                    : order.status === "delivered" ||
+                                      order.status === "completed"
                                     ? "Delivered to your location"
                                     : "Awaiting dispatch"}
                                 </p>
@@ -326,12 +424,14 @@ export default function RetailerOrderTracking({ orders }: Props) {
                               <div className="flex flex-col items-center">
                                 <div
                                   className={`w-8 h-8 rounded-full ${
+                                    order.status === "delivered" ||
                                     order.status === "completed"
                                       ? "bg-green-500"
                                       : "bg-gray-300 dark:bg-gray-600"
                                   } flex items-center justify-center`}
                                 >
-                                  {order.status === "completed" ? (
+                                  {order.status === "delivered" ||
+                                  order.status === "completed" ? (
                                     <CheckCircle2
                                       size={16}
                                       className="text-white"
@@ -349,7 +449,8 @@ export default function RetailerOrderTracking({ orders }: Props) {
                                   Delivered
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {order.status === "completed"
+                                  {order.status === "delivered" ||
+                                  order.status === "completed"
                                     ? order.deliveryDate
                                       ? `Delivered on ${new Date(
                                           order.deliveryDate

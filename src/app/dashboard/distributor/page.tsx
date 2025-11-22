@@ -7,18 +7,14 @@ import { motion } from "framer-motion";
 
 // IMPORT SHARED & DISTRIBUTOR COMPONENTS
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
-import AISavingsCard from "@/components/dashboard/shared/AISavingsCard";
 import DistributorStatsGrid from "@/components/dashboard/distributor/DistributorStatsGrid";
-import PendingRetailerOrders from "@/components/dashboard/distributor/PendingRetailerOrders";
 import FleetManagement from "@/components/dashboard/distributor/FleetManagement";
 import WarehouseInventoryComponent from "@/components/dashboard/distributor/WarehouseInventory";
-import ShipmentTracking from "@/components/dashboard/distributor/ShipmentTracking";
-import DeliveryHistory from "@/components/dashboard/distributor/DeliveryHistory";
-import TruckLoadManagement from "@/components/dashboard/distributor/TruckLoadManagement";
-
-// 🤖 AI-Powered Components
-import AIInsightsCard from "@/components/dashboard/shared/AIInsightsCard";
-import MarketIntelligenceCard from "@/components/dashboard/shared/MarketIntelligence";
+import ShipmentTrackingNew from "@/components/dashboard/distributor/ShipmentTrackingNew";
+import DeliveryHistoryNew from "@/components/dashboard/distributor/DeliveryHistoryNew";
+import TruckLoadManagementNew from "@/components/dashboard/distributor/TruckLoadManagementNew";
+import EarningsOverview from "@/components/dashboard/distributor/EarningsOverview";
+import RecentDeliveries from "@/components/dashboard/distributor/RecentDeliveries";
 
 import { getMyAlerts, Alert } from "@/actions/alertActions";
 import {
@@ -26,15 +22,18 @@ import {
   getWarehouseStats,
 } from "@/actions/warehouseActions";
 import {
-  getRetailerOrdersByStatus,
-  updateRetailerOrderStatus,
-} from "@/actions/retailerOrderActions";
+  getDistributorOrdersByStatus,
+  markOrderAsInTransit,
+  markOrderAsDelivered,
+  assignMultipleOrdersToTruck,
+} from "@/actions/orderActions";
 import { getMyFleet } from "@/actions/fleetActions";
-import { calculateDistributorAISavings } from "@/actions/aiSavingsActions";
+import {
+  getDistributorEarnings,
+  DeliveryEarnings,
+} from "@/actions/earningsActions";
 import { WarehouseInventory } from "@/models/WarehouseInventory";
-import { RetailerOrderSerialized } from "@/models/RetailerOrder";
 import { FleetSerialized } from "@/models/Fleet";
-import { useSession } from "next-auth/react";
 import {
   downloadCSV,
   prepareDataForExport,
@@ -44,51 +43,52 @@ import {
 // --- ADDED: Import the new component ---
 import AlertsPanel from "@/components/ui/AlertsPanel";
 
-type AISavings = {
-  total: number;
-  fromSpoilageReduction: number;
-  fromFuelReduction?: number;
-};
-
-type AISavingsMetadata = {
-  deliveredOrdersCount?: number;
-  totalDeliveryFees?: number;
-  totalGoodsValue?: number;
-  monthStart?: string;
-  monthEnd?: string;
+// Type for enriched order data from farmer orders
+type DistributorOrder = {
+  _id: string;
+  farmerId: string;
+  retailerId?: string;
+  distributorId?: string;
+  produceId: string;
+  produceName: string;
+  quantity: number;
+  unit: "kg" | "tons" | "bags";
+  pricePerUnit: number;
+  totalPrice: number;
+  deliveryFee?: number;
+  destination?: string;
+  deliveryAddress?: string;
+  distance?: number;
+  status: string;
+  orderDate: Date;
+  deliveryDate?: Date;
+  estimatedDelivery?: Date;
+  assignedTruckId?: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  farmerName?: string;
+  retailerName?: string;
 };
 
 export default function DistributorDashboard() {
-  const { data: session } = useSession();
-
   // --- STATE ---
   const [warehouseStock, setWarehouseStock] = useState<WarehouseInventory[]>(
     []
   );
-  const [retailerOrders, setRetailerOrders] = useState<
-    RetailerOrderSerialized[]
-  >([]);
-  const [assignedOrders, setAssignedOrders] = useState<
-    RetailerOrderSerialized[]
-  >([]);
-  const [inTransitOrders, setInTransitOrders] = useState<
-    RetailerOrderSerialized[]
-  >([]);
-  const [deliveredOrders, setDeliveredOrders] = useState<
-    RetailerOrderSerialized[]
-  >([]);
+  const [retailerOrders, setRetailerOrders] = useState<DistributorOrder[]>([]);
+  const [assignedOrders, setAssignedOrders] = useState<DistributorOrder[]>([]);
+  const [pickedUpOrders, setPickedUpOrders] = useState<DistributorOrder[]>([]);
+  const [inTransitOrders, setInTransitOrders] = useState<DistributorOrder[]>(
+    []
+  );
+  const [deliveredOrders, setDeliveredOrders] = useState<DistributorOrder[]>(
+    []
+  );
   const [fleet, setFleet] = useState<FleetSerialized[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [warehouseCapacity, setWarehouseCapacity] = useState(0);
-  const [aiSavings, setAiSavings] = useState<AISavings>({
-    total: 0,
-    fromSpoilageReduction: 0,
-    fromFuelReduction: 0,
-  });
-  const [aiSavingsMetadata, setAiSavingsMetadata] = useState<AISavingsMetadata>(
-    {}
-  );
-  const [isLoadingSavings, setIsLoadingSavings] = useState(true);
+  const [earnings, setEarnings] = useState<DeliveryEarnings | null>(null);
 
   // Sidebar & Responsive State
   const [isShrunk, setIsShrunk] = useState(false);
@@ -103,31 +103,53 @@ export default function DistributorDashboard() {
         const [
           alertsData,
           warehouseData,
-          pendingOrdersData,
-          assignedOrdersData,
-          inTransitOrdersData,
-          deliveredOrdersData,
+          assignedOrdersResult,
+          pickedUpOrdersResult,
+          inTransitOrdersResult,
+          deliveredOrdersResult,
           fleetData,
           statsData,
+          earningsData,
         ] = await Promise.all([
           getMyAlerts(),
           getMyWarehouseInventory(),
-          getRetailerOrdersByStatus("pending"),
-          getRetailerOrdersByStatus("assigned"),
-          getRetailerOrdersByStatus("in-transit"),
-          getRetailerOrdersByStatus("delivered"),
+          getDistributorOrdersByStatus("assigned"),
+          getDistributorOrdersByStatus("picked-up"),
+          getDistributorOrdersByStatus("in-transit"),
+          getDistributorOrdersByStatus("delivered"),
           getMyFleet(),
           getWarehouseStats(),
+          getDistributorEarnings(),
         ]);
 
         setAlerts(alertsData);
         setWarehouseStock(warehouseData);
-        setRetailerOrders(pendingOrdersData);
-        setAssignedOrders(assignedOrdersData);
-        setInTransitOrders(inTransitOrdersData);
-        setDeliveredOrders(deliveredOrdersData);
+        setRetailerOrders([]); // Not using pending orders in new flow
+        setAssignedOrders(
+          assignedOrdersResult.success && assignedOrdersResult.data
+            ? (assignedOrdersResult.data as DistributorOrder[])
+            : []
+        );
+        setPickedUpOrders(
+          pickedUpOrdersResult.success && pickedUpOrdersResult.data
+            ? (pickedUpOrdersResult.data as DistributorOrder[])
+            : []
+        );
+        setInTransitOrders(
+          inTransitOrdersResult.success && inTransitOrdersResult.data
+            ? (inTransitOrdersResult.data as DistributorOrder[])
+            : []
+        );
+        setDeliveredOrders(
+          deliveredOrdersResult.success && deliveredOrdersResult.data
+            ? (deliveredOrdersResult.data as DistributorOrder[])
+            : []
+        );
         setFleet(fleetData);
         setWarehouseCapacity(statsData.capacityPercentage);
+        if (earningsData.success && earningsData.data) {
+          setEarnings(earningsData.data);
+        }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       }
@@ -137,6 +159,7 @@ export default function DistributorDashboard() {
   }, []);
 
   // --- MEMOS (Derived Data) ---
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const pendingOrders = useMemo(
     () => retailerOrders.filter((o) => o.status === "pending"),
     [retailerOrders]
@@ -153,54 +176,42 @@ export default function DistributorDashboard() {
       .length;
   }, [alerts]);
 
-  // Fetch AI Savings
-  useEffect(() => {
-    const fetchAISavings = async () => {
-      if (!session?.user?.id) {
-        setIsLoadingSavings(false);
-        return;
-      }
-
-      try {
-        const savingsResult = await calculateDistributorAISavings(
-          session.user.id
-        );
-        if (savingsResult.success) {
-          setAiSavings(savingsResult.savings);
-          setAiSavingsMetadata(savingsResult.metadata || {});
-        }
-      } catch (error) {
-        console.error("Error fetching AI savings:", error);
-      } finally {
-        setIsLoadingSavings(false);
-      }
-    };
-
-    fetchAISavings();
-  }, [session?.user?.id]);
-
   // --- EVENT HANDLERS ---
-  const assignToRoute = async (orderId: string) => {
+  const startDelivery = async (orderId: string) => {
     try {
       // Find the order to get truck info
-      const order = assignedOrders.find((o) => o._id === orderId);
+      const order = pickedUpOrders.find((o) => o._id === orderId);
       if (!order?.assignedTruckId) {
-        console.log("Order has no assigned truck");
+        alert("Order has no assigned truck");
         return;
       }
 
       // Update order status to in-transit (delivery started)
-      await updateRetailerOrderStatus(orderId, "in-transit");
+      const result = await markOrderAsInTransit(orderId);
 
-      // Refresh assigned orders, in-transit orders, and fleet
-      const [assignedOrdersData, inTransitOrdersData, fleetData] =
+      if (!result.success) {
+        alert(result.error || "Failed to start delivery");
+        return;
+      }
+
+      // Refresh picked-up orders, in-transit orders, and fleet
+      const [pickedUpOrdersResult, inTransitOrdersResult, fleetData] =
         await Promise.all([
-          getRetailerOrdersByStatus("assigned"),
-          getRetailerOrdersByStatus("in-transit"),
+          getDistributorOrdersByStatus("picked-up"),
+          getDistributorOrdersByStatus("in-transit"),
           getMyFleet(),
         ]);
-      setAssignedOrders(assignedOrdersData);
-      setInTransitOrders(inTransitOrdersData);
+
+      setPickedUpOrders(
+        pickedUpOrdersResult.success && pickedUpOrdersResult.data
+          ? (pickedUpOrdersResult.data as DistributorOrder[])
+          : []
+      );
+      setInTransitOrders(
+        inTransitOrdersResult.success && inTransitOrdersResult.data
+          ? (inTransitOrdersResult.data as DistributorOrder[])
+          : []
+      );
       setFleet(fleetData);
 
       console.log(`Order ${orderId} is now in transit`);
@@ -212,17 +223,31 @@ export default function DistributorDashboard() {
   const markAsDelivered = async (orderId: string) => {
     try {
       // Update order status to delivered
-      await updateRetailerOrderStatus(orderId, "delivered");
+      const result = await markOrderAsDelivered(orderId);
+
+      if (!result.success) {
+        alert(result.error || "Failed to mark as delivered");
+        return;
+      }
 
       // Refresh in-transit orders, delivered orders, and fleet
-      const [inTransitOrdersData, deliveredOrdersData, fleetData] =
+      const [inTransitOrdersResult, deliveredOrdersResult, fleetData] =
         await Promise.all([
-          getRetailerOrdersByStatus("in-transit"),
-          getRetailerOrdersByStatus("delivered"),
+          getDistributorOrdersByStatus("in-transit"),
+          getDistributorOrdersByStatus("delivered"),
           getMyFleet(),
         ]);
-      setInTransitOrders(inTransitOrdersData);
-      setDeliveredOrders(deliveredOrdersData);
+
+      setInTransitOrders(
+        inTransitOrdersResult.success && inTransitOrdersResult.data
+          ? (inTransitOrdersResult.data as DistributorOrder[])
+          : []
+      );
+      setDeliveredOrders(
+        deliveredOrdersResult.success && deliveredOrdersResult.data
+          ? (deliveredOrdersResult.data as DistributorOrder[])
+          : []
+      );
       setFleet(fleetData);
 
       alert("Order marked as delivered successfully! 🎉");
@@ -233,57 +258,77 @@ export default function DistributorDashboard() {
     }
   };
 
+  const handleAssignMultipleOrders = async (
+    truckId: string,
+    orderIds: string[]
+  ) => {
+    try {
+      const result = await assignMultipleOrdersToTruck(truckId, orderIds);
+
+      if (!result.success) {
+        alert(result.error || "Failed to assign orders");
+        return;
+      }
+
+      alert(result.message || "Orders assigned successfully!");
+
+      // Refresh assigned orders and fleet
+      const [assignedOrdersResult, fleetData] = await Promise.all([
+        getDistributorOrdersByStatus("assigned"),
+        getMyFleet(),
+      ]);
+
+      setAssignedOrders(
+        assignedOrdersResult.success && assignedOrdersResult.data
+          ? (assignedOrdersResult.data as DistributorOrder[])
+          : []
+      );
+      setFleet(fleetData);
+    } catch (error) {
+      console.error("Error assigning orders:", error);
+      alert("Failed to assign orders. Please try again.");
+    }
+  };
+
   const handleExport = () => {
     // Prepare comprehensive dashboard data for export
     const exportData = prepareDataForExport([
-      ...retailerOrders.map((order) => ({
-        type: "Pending Order",
-        orderId: order._id,
-        destination: order.destination,
-        deliveryAddress: order.deliveryAddress,
-        status: order.status,
-        totalAmount: order.totalAmount,
-        deliveryFee: order.deliveryFee,
-        totalWeightKg: order.totalWeightKg,
-        distance: order.distance,
-        orderDate: order.orderDate,
-      })),
       ...assignedOrders.map((order) => ({
         type: "Assigned Order",
         orderId: order._id,
-        destination: order.destination,
-        deliveryAddress: order.deliveryAddress,
+        produce: order.produceName,
+        quantity: `${order.quantity} ${order.unit}`,
+        pricePerUnit: order.pricePerUnit,
+        totalPrice: order.totalPrice,
         status: order.status,
-        totalAmount: order.totalAmount,
-        deliveryFee: order.deliveryFee,
-        totalWeightKg: order.totalWeightKg,
-        distance: order.distance,
+        farmer: order.farmerName,
+        retailer: order.retailerName,
         assignedTruckId: order.assignedTruckId,
         orderDate: order.orderDate,
       })),
       ...inTransitOrders.map((order) => ({
         type: "In Transit Order",
         orderId: order._id,
-        destination: order.destination,
-        deliveryAddress: order.deliveryAddress,
+        produce: order.produceName,
+        quantity: `${order.quantity} ${order.unit}`,
+        pricePerUnit: order.pricePerUnit,
+        totalPrice: order.totalPrice,
         status: order.status,
-        totalAmount: order.totalAmount,
-        deliveryFee: order.deliveryFee,
-        totalWeightKg: order.totalWeightKg,
-        distance: order.distance,
+        farmer: order.farmerName,
+        retailer: order.retailerName,
         assignedTruckId: order.assignedTruckId,
         orderDate: order.orderDate,
       })),
       ...deliveredOrders.map((order) => ({
         type: "Delivered Order",
         orderId: order._id,
-        destination: order.destination,
-        deliveryAddress: order.deliveryAddress,
+        produce: order.produceName,
+        quantity: `${order.quantity} ${order.unit}`,
+        pricePerUnit: order.pricePerUnit,
+        totalPrice: order.totalPrice,
         status: order.status,
-        totalAmount: order.totalAmount,
-        deliveryFee: order.deliveryFee,
-        totalWeightKg: order.totalWeightKg,
-        distance: order.distance,
+        farmer: order.farmerName,
+        retailer: order.retailerName,
         deliveryDate: order.deliveryDate,
         orderDate: order.orderDate,
       })),
@@ -330,141 +375,84 @@ export default function DistributorDashboard() {
             alertCount={alertCount}
           />
 
-          <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto">
-            {/* Hero Section - Logistics Command Center */}
-            <div className="mb-6">
-              <div className="relative rounded-2xl overflow-hidden bg-linear-to-br from-blue-50 via-cyan-50 to-sky-50 dark:from-blue-900/20 dark:via-cyan-900/20 dark:to-sky-900/20 border border-blue-200 dark:border-blue-800">
-                <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10"></div>
-                <div className="relative p-6 md:p-8">
-                  <div className="flex items-start justify-between flex-wrap gap-4">
-                    <div className="flex-1 min-w-[200px]">
-                      <h2 className="text-3xl font-bold bg-linear-to-r from-blue-700 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent mb-2">
-                        Logistics Command Center
-                      </h2>
-                      <p className="text-gray-600 dark:text-gray-400">
-                        AI-optimized fleet management & delivery tracking
-                      </p>
-                    </div>
-                    <div className="flex gap-3">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="px-6 py-3 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/30 flex items-center gap-2"
-                      >
-                        <span>🚚</span> Fleet Status
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
+          <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
             {/* Priority Section 1: Stats Overview */}
-            <div className="mb-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="mb-8"
+            >
               <DistributorStatsGrid
-                pendingOrdersCount={pendingOrders.length}
+                pendingOrdersCount={assignedOrders.length}
                 trucksOnRoadCount={trucksOnRoad.length}
                 warehouseCapacity={warehouseCapacity}
               />
-            </div>
+            </motion.div>
 
-            {/* Priority Section 2: AI Insights + Market Intelligence */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <AIInsightsCard
-                role="distributor"
-                dashboardData={{
-                  stats: {
-                    totalTrucks: fleet.length,
-                    activeDeliveries: inTransitOrders.length,
-                    pendingOrders: pendingOrders.length,
-                    warehouseItems: warehouseStock.length,
-                  },
-                  recentActivity: [
-                    `${fleet.length} truck${
-                      fleet.length !== 1 ? "s" : ""
-                    } in fleet`,
-                    `${inTransitOrders.length} active deliver${
-                      inTransitOrders.length !== 1 ? "ies" : "y"
-                    }`,
-                    `${pendingOrders.length} pending order${
-                      pendingOrders.length !== 1 ? "s" : ""
-                    }`,
-                    `${deliveredOrders.length} order${
-                      deliveredOrders.length !== 1 ? "s" : ""
-                    } delivered`,
-                  ],
-                  inventory: warehouseStock,
-                  orders: retailerOrders,
-                  performance: {
-                    onTimeDeliveryRate: deliveredOrders.length > 0 ? 95 : 0,
-                    activeShipments: inTransitOrders.length,
-                    totalRevenue: aiSavings.total,
-                  },
-                }}
-              />
+            {/* Earnings Overview */}
+            {earnings && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="mb-8"
+              >
+                <EarningsOverview earnings={earnings} />
+              </motion.div>
+            )}
 
-              <MarketIntelligenceCard
-                userRole="distributor"
-                userProducts={[]}
-              />
-            </div>
-
-            {/* Priority Section 3: Critical Operations */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <PendingRetailerOrders
-                orders={pendingOrders}
-                onAssign={assignToRoute}
-              />
-              <ShipmentTracking
-                orders={inTransitOrders}
-                onMarkDelivered={markAsDelivered}
-              />
-            </div>
-
-            {/* Secondary Section: Fleet + AI Savings */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Priority Section: Fleet Management + Warehouse Inventory */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+            >
               <FleetManagement fleet={fleet} />
-              <AISavingsCard
-                savings={aiSavings}
-                isLoading={isLoadingSavings}
-                metadata={aiSavingsMetadata}
-              />
-            </div>
-
-            {/* Tertiary Section: Warehouse + Order Book */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <WarehouseInventoryComponent stock={warehouseStock} />
-              <DeliveryHistory deliveredOrders={deliveredOrders} />
-            </div>
+            </motion.div>
 
-            <TruckLoadManagement
-              trucks={fleet}
-              pendingOrders={retailerOrders}
-              onAssignOrders={async () => {
-                try {
-                  // Refresh data after assignment
-                  const [pendingOrdersData, assignedOrdersData, fleetData] =
-                    await Promise.all([
-                      getRetailerOrdersByStatus("pending"),
-                      getRetailerOrdersByStatus("assigned"),
-                      getMyFleet(),
-                    ]);
-                  setRetailerOrders(pendingOrdersData);
-                  setAssignedOrders(assignedOrdersData);
-                  setFleet(fleetData);
-                } catch (error) {
-                  console.error(
-                    "Error refreshing data after assignment:",
-                    error
-                  );
-                }
-              }}
-              onGetSuggestions={async () => {
-                // Refresh fleet data to get latest availability
-                const fleetData = await getMyFleet();
-                setFleet(fleetData);
-              }}
-            />
+            {/* Shipment Tracking + Recent Deliveries */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+            >
+              <ShipmentTrackingNew
+                orders={[...pickedUpOrders, ...inTransitOrders]}
+                onMarkDelivered={markAsDelivered}
+                onStartDelivery={startDelivery}
+              />
+              {earnings && earnings.recentDeliveries.length > 0 && (
+                <RecentDeliveries deliveries={earnings.recentDeliveries} />
+              )}
+            </motion.div>
+
+            {/* Delivery History (Full) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="mb-8"
+            >
+              <DeliveryHistoryNew orders={deliveredOrders} />
+            </motion.div>
+
+            {/* Truck Load Management */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mb-8"
+            >
+              <TruckLoadManagementNew
+                trucks={fleet.filter((t) => t.status === "available")}
+                assignedOrders={assignedOrders}
+                onAssignOrders={handleAssignMultipleOrders}
+              />
+            </motion.div>
           </div>
         </motion.main>
       </div>
