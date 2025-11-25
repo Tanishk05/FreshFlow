@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Leaf, Package, Search, ShoppingCart } from "lucide-react";
@@ -73,13 +74,15 @@ export default function FarmerMarketplacePage() {
   return (
     <DashboardLayout>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          role={role}
-          isShrunk={isShrunk}
-          setIsShrunk={setIsShrunk}
-          isMobileOpen={isMobileOpen}
-          setIsMobileOpen={setIsMobileOpen}
-        />
+        <div className="hidden md:block">
+          <Sidebar
+            role={role}
+            isShrunk={isShrunk}
+            setIsShrunk={setIsShrunk}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+          />
+        </div>
 
         <motion.main
           animate={{
@@ -96,12 +99,13 @@ export default function FarmerMarketplacePage() {
             showNewPlan={false}
             showExport={false}
             showAlerts={false}
+            hideMobileMenuButton
           />
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
-            <div className="p-6 md:p-8">
+          <div className="flex-1 overflow-y-auto bg-gray-50/50 dark:bg-slate-950/50 custom-scrollbar">
+            <div className="p-6 md:p-8 pb-20 md:pb-8">
               {/* Header */}
               <div className="mb-8">
-                <div className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-linear-to-r from-green-600 to-emerald-500 text-white shadow">
+                <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-medium border border-emerald-200/50 dark:border-emerald-800/50">
                   <ShoppingCart size={14} /> Beta Marketplace
                 </div>
                 <div className="mt-3 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -229,6 +233,7 @@ export default function FarmerMarketplacePage() {
           </div>
         </motion.main>
       </div>
+      <MobileBottomNav role={role} />
     </DashboardLayout>
   );
 }

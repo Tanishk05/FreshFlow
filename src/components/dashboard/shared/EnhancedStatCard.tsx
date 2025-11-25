@@ -18,46 +18,46 @@ interface EnhancedStatCardProps {
 
 const colorSchemes = {
   green: {
-    bg: "from-green-500 to-emerald-600",
-    light: "bg-green-100 dark:bg-green-900/30",
-    text: "text-green-600 dark:text-green-400",
-    shadow: "shadow-green-500/20",
+    bg: "from-emerald-400 to-emerald-600",
+    light: "bg-emerald-50 dark:bg-emerald-950/40",
+    text: "text-emerald-700 dark:text-emerald-400",
+    shadow: "shadow-emerald-500/10",
   },
   blue: {
-    bg: "from-blue-500 to-cyan-600",
-    light: "bg-blue-100 dark:bg-blue-900/30",
-    text: "text-blue-600 dark:text-blue-400",
-    shadow: "shadow-blue-500/20",
+    bg: "from-blue-400 to-indigo-600",
+    light: "bg-blue-50 dark:bg-blue-950/40",
+    text: "text-blue-700 dark:text-blue-400",
+    shadow: "shadow-blue-500/10",
   },
   purple: {
-    bg: "from-purple-500 to-pink-600",
-    light: "bg-purple-100 dark:bg-purple-900/30",
-    text: "text-purple-600 dark:text-purple-400",
-    shadow: "shadow-purple-500/20",
+    bg: "from-purple-400 to-violet-600",
+    light: "bg-purple-50 dark:bg-purple-950/40",
+    text: "text-purple-700 dark:text-purple-400",
+    shadow: "shadow-purple-500/10",
   },
   orange: {
-    bg: "from-orange-500 to-amber-600",
-    light: "bg-orange-100 dark:bg-orange-900/30",
-    text: "text-orange-600 dark:text-orange-400",
-    shadow: "shadow-orange-500/20",
+    bg: "from-orange-400 to-amber-500",
+    light: "bg-orange-50 dark:bg-orange-950/40",
+    text: "text-orange-700 dark:text-orange-400",
+    shadow: "shadow-orange-500/10",
   },
   red: {
-    bg: "from-red-500 to-rose-600",
-    light: "bg-red-100 dark:bg-red-900/30",
-    text: "text-red-600 dark:text-red-400",
-    shadow: "shadow-red-500/20",
+    bg: "from-rose-400 to-red-600",
+    light: "bg-rose-50 dark:bg-rose-950/40",
+    text: "text-rose-700 dark:text-rose-400",
+    shadow: "shadow-rose-500/10",
   },
   cyan: {
-    bg: "from-cyan-500 to-teal-600",
-    light: "bg-cyan-100 dark:bg-cyan-900/30",
-    text: "text-cyan-600 dark:text-cyan-400",
-    shadow: "shadow-cyan-500/20",
+    bg: "from-cyan-400 to-teal-500",
+    light: "bg-cyan-50 dark:bg-cyan-950/40",
+    text: "text-cyan-700 dark:text-cyan-400",
+    shadow: "shadow-cyan-500/10",
   },
   pink: {
-    bg: "from-pink-500 to-rose-600",
-    light: "bg-pink-100 dark:bg-pink-900/30",
-    text: "text-pink-600 dark:text-pink-400",
-    shadow: "shadow-pink-500/20",
+    bg: "from-pink-400 to-rose-500",
+    light: "bg-pink-50 dark:bg-pink-950/40",
+    text: "text-pink-700 dark:text-pink-400",
+    shadow: "shadow-pink-500/10",
   },
 };
 
@@ -74,30 +74,35 @@ export default function EnhancedStatCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.9 }}
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.4, delay }}
-      whileHover={{ y: -8, scale: 1.02 }}
-      className="group relative rounded-3xl overflow-hidden backdrop-blur-xl bg-white/70 dark:bg-gray-800/70 border border-white/30 dark:border-gray-700/30 shadow-xl hover:shadow-2xl transition-all duration-300 p-6"
+      transition={{ duration: 0.4, delay, ease: "easeOut" }}
+      whileHover={{ y: -4, scale: 1.01 }}
+      className="group relative rounded-2xl overflow-hidden bg-white dark:bg-slate-800/50 border border-gray-200/50 dark:border-slate-700/50 shadow-sm hover:shadow-lg transition-all duration-300 p-6 backdrop-blur-sm"
     >
       {/* Animated Background Gradient */}
       <div
-        className={`absolute inset-0 bg-linear-to-br ${scheme.bg} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
+        className={`absolute inset-0 bg-linear-to-br ${scheme.bg} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}
       />
 
       {/* Floating Orb */}
       <div
-        className={`absolute -top-4 -right-4 w-24 h-24 ${scheme.light} rounded-full blur-2xl opacity-20 group-hover:opacity-40 transition-opacity`}
+        className={`absolute -top-4 -right-4 w-20 h-20 ${scheme.light} rounded-full blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-500`}
       />
 
       <div className="relative">
         {/* Icon and Trend */}
         <div className="flex items-start justify-between mb-4">
           <motion.div
-            initial={{ scale: 0, rotate: -180 }}
+            initial={{ scale: 0, rotate: -90 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ delay: delay + 0.2, type: "spring", stiffness: 200 }}
-            className={`w-14 h-14 rounded-2xl ${scheme.light} flex items-center justify-center ${scheme.shadow} shadow-lg group-hover:scale-110 transition-transform`}
+            transition={{
+              delay: delay + 0.2,
+              type: "spring",
+              stiffness: 260,
+              damping: 20,
+            }}
+            className={`w-12 h-12 rounded-xl ${scheme.light} flex items-center justify-center ${scheme.shadow} group-hover:scale-105 transition-transform duration-300`}
           >
             <span className="text-2xl">{icon}</span>
           </motion.div>
@@ -107,10 +112,10 @@ export default function EnhancedStatCard({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: delay + 0.3 }}
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${
                 trend.isPositive
-                  ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-                  : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
+                  : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400"
               }`}
             >
               <span>{trend.isPositive ? "↑" : "↓"}</span>
@@ -124,7 +129,7 @@ export default function EnhancedStatCard({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: delay + 0.25 }}
-          className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2"
+          className="text-sm font-medium text-gray-600 dark:text-slate-400 mb-2 tracking-tight"
         >
           {title}
         </motion.h4>
@@ -134,7 +139,7 @@ export default function EnhancedStatCard({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: delay + 0.3 }}
-          className={`text-3xl font-bold ${scheme.text} mb-1`}
+          className={`text-3xl font-semibold ${scheme.text} mb-1 tracking-tight`}
         >
           {value}
         </motion.div>
@@ -145,7 +150,7 @@ export default function EnhancedStatCard({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: delay + 0.35 }}
-            className="text-xs text-gray-500 dark:text-gray-500"
+            className="text-xs text-gray-500 dark:text-slate-500"
           >
             {subtitle}
           </motion.p>

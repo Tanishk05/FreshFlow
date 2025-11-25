@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileBottomNav from "../../../../components/dashboard/MobileBottomNav";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import ModernCard from "@/components/dashboard/shared/ModernCard";
 import EnhancedStatCard from "@/components/dashboard/shared/EnhancedStatCard";
@@ -111,14 +112,16 @@ export default function RetailerOrdersPage() {
   return (
     <DashboardLayout>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          role="retailer"
-          isShrunk={isShrunk}
-          setIsShrunk={setIsShrunk}
-          isMobileOpen={isMobileOpen}
-          setIsMobileOpen={setIsMobileOpen}
-          onAlertsClick={() => setIsAlertsOpen(true)}
-        />
+        <div className="hidden md:block">
+          <Sidebar
+            role="retailer"
+            isShrunk={isShrunk}
+            setIsShrunk={setIsShrunk}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+            onAlertsClick={() => setIsAlertsOpen(true)}
+          />
+        </div>
 
         <motion.main
           animate={{
@@ -151,7 +154,7 @@ export default function RetailerOrdersPage() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6 bg-linear-to-br from-gray-50 via-purple-50/30 to-pink-50/30 dark:from-gray-900 dark:via-purple-950/20 dark:to-pink-950/20">
+          <div className="flex-1 overflow-y-auto p-6 pb-20 md:pb-6 bg-linear-to-br from-gray-50 via-purple-50/30 to-pink-50/30 dark:from-gray-900 dark:via-purple-950/20 dark:to-pink-950/20">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <EnhancedStatCard
@@ -350,6 +353,14 @@ export default function RetailerOrdersPage() {
         isOpen={selectedOrder !== null}
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
+      />
+      <MobileBottomNav
+        role="retailer"
+        onAlertsClick={() => setIsAlertsOpen(true)}
+        alertCount={
+          alerts.filter((a) => a.type === "critical" || a.type === "warning")
+            .length
+        }
       />
     </DashboardLayout>
   );

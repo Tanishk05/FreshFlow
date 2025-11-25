@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { motion } from "framer-motion";
@@ -179,13 +180,15 @@ export default function ProfilePage() {
   return (
     <DashboardLayout>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          role={role}
-          isShrunk={isShrunk}
-          setIsShrunk={setIsShrunk}
-          isMobileOpen={isMobileOpen}
-          setIsMobileOpen={setIsMobileOpen}
-        />
+        <div className="hidden md:block">
+          <Sidebar
+            role={role}
+            isShrunk={isShrunk}
+            setIsShrunk={setIsShrunk}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+          />
+        </div>
 
         <motion.main
           animate={{
@@ -203,9 +206,10 @@ export default function ProfilePage() {
             showNewPlan={false}
             showExport={false}
             showAlerts={false}
+            hideMobileMenuButton
           />
 
-          <div className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto">
+          <div className="flex-1 min-h-0 p-4 md:p-8 pb-20 md:pb-8 overflow-y-auto">
             <div className="max-w-4xl mx-auto space-y-6">
               {/* Header chip */}
               <div className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-linear-to-r from-green-600 to-emerald-500 text-white shadow">
@@ -405,6 +409,7 @@ export default function ProfilePage() {
           </div>
         </motion.main>
       </div>
+      <MobileBottomNav role={role} />
     </DashboardLayout>
   );
 }

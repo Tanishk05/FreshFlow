@@ -16,12 +16,12 @@ interface ModernCardProps {
 }
 
 const gradients = {
-  green: "from-green-500/20 via-emerald-500/10 to-teal-500/20",
-  blue: "from-blue-500/20 via-cyan-500/10 to-sky-500/20",
-  purple: "from-purple-500/20 via-pink-500/10 to-rose-500/20",
-  orange: "from-orange-500/20 via-amber-500/10 to-yellow-500/20",
-  pink: "from-pink-500/20 via-rose-500/10 to-red-500/20",
-  cyan: "from-cyan-500/20 via-teal-500/10 to-emerald-500/20",
+  green: "from-emerald-500/10 via-emerald-500/5 to-teal-500/10",
+  blue: "from-blue-500/10 via-indigo-500/5 to-sky-500/10",
+  purple: "from-purple-500/10 via-violet-500/5 to-fuchsia-500/10",
+  orange: "from-orange-500/10 via-amber-500/5 to-yellow-500/10",
+  pink: "from-pink-500/10 via-rose-500/5 to-red-500/10",
+  cyan: "from-cyan-500/10 via-teal-500/5 to-emerald-500/10",
 };
 
 export default function ModernCard({
@@ -41,9 +41,9 @@ export default function ModernCard({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        whileHover={hoverEffect ? { y: -4 } : {}}
-        className={`p-4 md:p-6 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 transition-all duration-300 ${className}`}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        whileHover={hoverEffect ? { y: -2, scale: 1.005 } : {}}
+        className={`p-4 md:p-6 rounded-xl bg-white dark:bg-slate-800/50 shadow-sm border border-gray-200/60 dark:border-slate-700/60 hover:shadow-md hover:border-gray-300 dark:hover:border-slate-600 transition-all duration-300 ${className}`}
       >
         {/* Header */}
         {(title || icon || headerAction) && (
@@ -54,12 +54,12 @@ export default function ModernCard({
               )}
               <div className="flex-1">
                 {title && (
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 tracking-tight">
                     {title}
                   </h3>
                 )}
                 {subtitle && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                     {subtitle}
                   </p>
                 )}
@@ -80,13 +80,13 @@ export default function ModernCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      whileHover={hoverEffect ? { y: -4, scale: 1.01 } : {}}
-      className={`relative rounded-3xl overflow-hidden ${
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      whileHover={hoverEffect ? { y: -2, scale: 1.005 } : {}}
+      className={`relative rounded-2xl overflow-hidden ${
         glassEffect
-          ? "backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 border border-white/20 dark:border-gray-700/30"
-          : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-      } shadow-xl hover:shadow-2xl transition-all duration-300 ${className}`}
+          ? "bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm border border-gray-200/50 dark:border-slate-700/50"
+          : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700"
+      } shadow-sm hover:shadow-lg transition-all duration-300 ${className}`}
     >
       {/* Gradient Background */}
       <div

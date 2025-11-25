@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import OrderBook from "@/components/dashboard/distributor/OrderBook";
@@ -26,13 +27,15 @@ export default function OrderBookPage() {
   return (
     <DashboardLayout>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          role={role}
-          isShrunk={isShrunk}
-          setIsShrunk={setIsShrunk}
-          isMobileOpen={isMobileOpen}
-          setIsMobileOpen={setIsMobileOpen}
-        />
+        <div className="hidden md:block">
+          <Sidebar
+            role={role}
+            isShrunk={isShrunk}
+            setIsShrunk={setIsShrunk}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+          />
+        </div>
 
         <motion.main
           animate={{
@@ -49,9 +52,10 @@ export default function OrderBookPage() {
             showNewPlan={false}
             showExport={false}
             showAlerts={false}
+            hideMobileMenuButton
           />
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
-            <div className="p-8">
+          <div className="flex-1 overflow-y-auto bg-gray-50/50 dark:bg-slate-950/50 custom-scrollbar">
+            <div className="p-8 pb-20 md:pb-8">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h1 className="text-2xl font-bold">Order Book</h1>
@@ -86,6 +90,7 @@ export default function OrderBookPage() {
           </div>
         </motion.main>
       </div>
+      <MobileBottomNav role={role} />
     </DashboardLayout>
   );
 }

@@ -25,25 +25,25 @@ type ActionButtonProps = {
 const variantClasses = {
   primary: "bg-blue-600 hover:bg-blue-700 text-white",
   secondary:
-    "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300",
-  success: "bg-green-600 hover:bg-green-700 text-white",
-  danger: "bg-red-600 hover:bg-red-700 text-white",
-  warning: "bg-yellow-600 hover:bg-yellow-700 text-white",
+    "bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200",
+  success: "bg-emerald-600 hover:bg-emerald-700 text-white",
+  danger: "bg-rose-600 hover:bg-rose-700 text-white",
+  warning: "bg-amber-600 hover:bg-amber-700 text-white",
   outline:
-    "bg-transparent border-2 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300",
+    "bg-transparent border-2 border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 text-gray-700 dark:text-slate-300",
 };
 
 const gradientClasses = {
   green:
-    "bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white",
-  blue: "bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white",
+    "bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-emerald-500/20",
+  blue: "bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-blue-500/20",
   purple:
-    "bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white",
-  cyan: "bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white",
+    "bg-linear-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white shadow-purple-500/20",
+  cyan: "bg-linear-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-cyan-500/20",
   orange:
-    "bg-linear-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white",
-  pink: "bg-linear-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white",
-  red: "bg-linear-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white",
+    "bg-linear-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-orange-500/20",
+  pink: "bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white shadow-pink-500/20",
+  red: "bg-linear-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white shadow-rose-500/20",
 };
 
 const sizeClasses = {
@@ -65,7 +65,7 @@ export default function ActionButton({
   type = "button",
 }: ActionButtonProps) {
   const baseClasses =
-    "rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md";
+    "rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm";
 
   const colorClasses = gradient
     ? gradientClasses[gradient]

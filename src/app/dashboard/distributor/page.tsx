@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { motion } from "framer-motion";
 
@@ -348,14 +349,16 @@ export default function DistributorDashboard() {
   return (
     <DashboardLayout>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          role="distributor"
-          isShrunk={isShrunk}
-          setIsShrunk={setIsShrunk}
-          isMobileOpen={isMobileOpen}
-          setIsMobileOpen={setIsMobileOpen}
-          onAlertsClick={() => setIsAlertsOpen(true)}
-        />
+        <div className="hidden md:block">
+          <Sidebar
+            role="distributor"
+            isShrunk={isShrunk}
+            setIsShrunk={setIsShrunk}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+            onAlertsClick={() => setIsAlertsOpen(true)}
+          />
+        </div>
         <motion.main
           animate={{
             marginLeft: isDesktop ? (isShrunk ? "88px" : "240px") : "0px",
@@ -372,10 +375,11 @@ export default function DistributorDashboard() {
             isMobileOpen={isMobileOpen}
             setIsMobileOpen={setIsMobileOpen}
             onAlertsClick={() => setIsAlertsOpen(true)}
+            hideMobileMenuButton
             alertCount={alertCount}
           />
 
-          <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+          <div className="flex-1 min-h-0 p-4 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
             {/* Priority Section 1: Stats Overview */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -461,6 +465,11 @@ export default function DistributorDashboard() {
         isOpen={isAlertsOpen}
         onClose={() => setIsAlertsOpen(false)}
         alerts={alerts}
+      />
+      <MobileBottomNav
+        role="distributor"
+        onAlertsClick={() => setIsAlertsOpen(true)}
+        alertCount={alertCount}
       />
     </DashboardLayout>
   );

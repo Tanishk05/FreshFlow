@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import { motion } from "framer-motion";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { getMyProduce } from "@/actions/produceActions";
@@ -341,14 +342,16 @@ export default function FarmerDashboard() {
   return (
     <DashboardLayout>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          role="farmer"
-          isShrunk={isShrunk}
-          setIsShrunk={setIsShrunk}
-          isMobileOpen={isMobileOpen}
-          setIsMobileOpen={setIsMobileOpen}
-          onAlertsClick={() => setIsAlertsOpen(true)}
-        />
+        <div className="hidden md:block">
+          <Sidebar
+            role="farmer"
+            isShrunk={isShrunk}
+            setIsShrunk={setIsShrunk}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+            onAlertsClick={() => setIsAlertsOpen(true)}
+          />
+        </div>
 
         <motion.main
           animate={{
@@ -363,6 +366,7 @@ export default function FarmerDashboard() {
             isMobileOpen={isMobileOpen}
             setIsMobileOpen={setIsMobileOpen}
             onAlertsClick={() => setIsAlertsOpen(true)}
+            hideMobileMenuButton
             alertCount={
               alerts.filter(
                 (a) => a.type === "critical" || a.type === "warning"
@@ -371,7 +375,7 @@ export default function FarmerDashboard() {
           />
 
           {/* --- RESPONSIVE CONTENT AREA --- */}
-          <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+          <div className="flex-1 min-h-0 p-4 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-gray-50/50 dark:bg-slate-950/50 custom-scrollbar">
             {/* Priority Section 1: Order Tracking + Pending Orders (Most Important) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -434,6 +438,14 @@ export default function FarmerDashboard() {
         isOpen={isAlertsOpen}
         onClose={() => setIsAlertsOpen(false)}
         alerts={alerts}
+      />
+      <MobileBottomNav
+        role="farmer"
+        onAlertsClick={() => setIsAlertsOpen(true)}
+        alertCount={
+          alerts.filter((a) => a.type === "critical" || a.type === "warning")
+            .length
+        }
       />
     </DashboardLayout>
   );

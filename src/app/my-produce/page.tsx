@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSession } from "next-auth/react";
@@ -242,13 +243,15 @@ export default function MyProducePage() {
   return (
     <DashboardLayout>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          role={role}
-          isShrunk={isShrunk}
-          setIsShrunk={setIsShrunk}
-          isMobileOpen={isMobileOpen}
-          setIsMobileOpen={setIsMobileOpen}
-        />
+        <div className="hidden md:block">
+          <Sidebar
+            role={role}
+            isShrunk={isShrunk}
+            setIsShrunk={setIsShrunk}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+          />
+        </div>
 
         <motion.main
           animate={{
@@ -265,32 +268,33 @@ export default function MyProducePage() {
             newButtonText="Add Produce"
             showExport={false}
             showAlerts={false}
+            hideMobileMenuButton
           />
 
-          <div className="flex-1 overflow-y-auto bg-linear-to-br from-green-50 via-white to-emerald-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
-            <div className="p-6 md:p-8">
+          <div className="flex-1 overflow-y-auto bg-gray-50/50 dark:bg-slate-950/50 custom-scrollbar">
+            <div className="p-6 md:p-8 pb-20 md:pb-8">
               {/* Header with Stats */}
               <div className="mb-8">
-                <div className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-linear-to-r from-green-600 to-emerald-500 text-white shadow mb-4">
+                <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-medium border border-blue-200/50 dark:border-blue-800/50 mb-4">
                   <Package size={14} /> Inventory Management
                 </div>
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-100 dark:border-gray-700"
+                    whileHover={{ scale: 1.01 }}
+                    className="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border border-gray-200/60 dark:border-slate-700/60 hover:shadow-md transition-all"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">
                           Total Items
                         </p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
+                        <p className="text-3xl font-semibold text-gray-900 dark:text-slate-100 mt-1">
                           {stats.total}
                         </p>
                       </div>
-                      <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl">
                         <Package
                           className="text-blue-600 dark:text-blue-400"
                           size={24}
@@ -300,21 +304,21 @@ export default function MyProducePage() {
                   </motion.div>
 
                   <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-100 dark:border-gray-700"
+                    whileHover={{ scale: 1.01 }}
+                    className="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border border-gray-200/60 dark:border-slate-700/60 hover:shadow-md transition-all"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">
                           Available
                         </p>
-                        <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">
+                        <p className="text-3xl font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
                           {stats.available}
                         </p>
                       </div>
-                      <div className="p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl">
                         <TrendingUp
-                          className="text-green-600 dark:text-green-400"
+                          className="text-emerald-600 dark:text-emerald-400"
                           size={24}
                         />
                       </div>
@@ -322,8 +326,8 @@ export default function MyProducePage() {
                   </motion.div>
 
                   <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-100 dark:border-gray-700"
+                    whileHover={{ scale: 1.01 }}
+                    className="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border border-gray-200/60 dark:border-slate-700/60 hover:shadow-md transition-all"
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -580,6 +584,7 @@ export default function MyProducePage() {
           </div>
         </motion.main>
       </div>
+      <MobileBottomNav role={role} />
 
       {/* Add/Edit Modal */}
       <AnimatePresence>

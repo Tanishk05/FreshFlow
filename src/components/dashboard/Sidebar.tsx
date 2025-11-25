@@ -14,6 +14,7 @@ import {
   Warehouse, // Icon for Distributor Warehouse
   ShoppingCart, // --- ADDED for Farmer Marketplace
   ListOrdered, // --- ADDED for Distributor Order Book
+  X,
 } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import Image from "next/image";
@@ -238,15 +239,18 @@ function SidebarContent({
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div
-        className={`flex items-center gap-2 pb-6 mb-6 border-b border-gray-200 dark:border-gray-700 ${
+        className={`flex items-center gap-2 pb-5 mb-5 border-b border-gray-200/60 dark:border-slate-700/60 ${
           isShrunk ? "justify-center" : ""
         }`}
       >
-        <Icon className="text-green-600 shrink-0" size={28} />
+        <Icon
+          className="text-emerald-600 dark:text-emerald-500 shrink-0"
+          size={26}
+        />
         <motion.h1
           animate={{ opacity: isShrunk ? 0 : 1, width: isShrunk ? 0 : "auto" }}
           transition={{ duration: 0.2 }}
-          className="text-xl font-bold text-gray-900 dark:text-white overflow-hidden whitespace-nowrap"
+          className="text-lg font-semibold text-gray-900 dark:text-slate-100 overflow-hidden whitespace-nowrap tracking-tight"
         >
           {title}
         </motion.h1>
@@ -273,9 +277,9 @@ function SidebarContent({
                             e.preventDefault();
                             if (onAlertsClick) onAlertsClick();
                           }}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium ${
                             isShrunk ? "justify-center" : ""
-                          } text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white`}
+                          } text-gray-600 dark:text-slate-400 hover:bg-gray-100/70 dark:hover:bg-slate-800/70 hover:text-gray-900 dark:hover:text-slate-100`}
                         >
                           <div className="shrink-0">{link.icon}</div>
                           <motion.span
@@ -294,10 +298,10 @@ function SidebarContent({
                         <Tooltip.Portal>
                           <Tooltip.Content
                             side="right"
-                            className="z-50 ml-2 px-3 py-1.5 text-sm font-medium text-white bg-gray-900 rounded-md shadow-lg dark:bg-gray-700"
+                            className="z-50 ml-2 px-3 py-1.5 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-xl dark:bg-slate-700"
                           >
                             {link.name}
-                            <Tooltip.Arrow className="fill-gray-900 dark:fill-gray-700" />
+                            <Tooltip.Arrow className="fill-gray-900 dark:fill-slate-700" />
                           </Tooltip.Content>
                         </Tooltip.Portal>
                       )}
@@ -333,12 +337,12 @@ function SidebarContent({
                             router.push(link.href);
                           }
                         }}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium ${
                           isShrunk ? "justify-center" : ""
                         } ${
                           isActive
-                            ? "bg-green-50 dark:bg-green-900/50 text-green-700 dark:text-green-300"
-                            : "text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                            ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 shadow-sm"
+                            : "text-gray-600 dark:text-slate-400 hover:bg-gray-100/70 dark:hover:bg-slate-800/70 hover:text-gray-900 dark:hover:text-slate-100"
                         }`}
                       >
                         <div className="shrink-0">{link.icon}</div>
@@ -358,10 +362,10 @@ function SidebarContent({
                       <Tooltip.Portal>
                         <Tooltip.Content
                           side="right"
-                          className="z-50 ml-2 px-3 py-1.5 text-sm font-medium text-white bg-gray-900 rounded-md shadow-lg dark:bg-gray-700"
+                          className="z-50 ml-2 px-3 py-1.5 text-sm font-medium text-white bg-gray-900 dark:bg-slate-700 rounded-lg shadow-xl"
                         >
                           {link.name}
-                          <Tooltip.Arrow className="fill-gray-900 dark:fill-gray-700" />
+                          <Tooltip.Arrow className="fill-gray-900 dark:fill-slate-700" />
                         </Tooltip.Content>
                       </Tooltip.Portal>
                     )}
@@ -375,7 +379,7 @@ function SidebarContent({
 
       {/* User Profile Footer (stays at bottom) */}
       <div
-        className={`mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 ${
+        className={`mt-6 pt-5 border-t border-gray-200/60 dark:border-slate-700/60 ${
           isShrunk ? "justify-center" : ""
         }`}
       >
@@ -391,7 +395,7 @@ function SidebarContent({
           }}
           className={`flex items-center gap-3 ${
             isShrunk ? "justify-center" : ""
-          } hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg p-2 transition-colors`}
+          } hover:bg-gray-100/70 dark:hover:bg-slate-800/70 rounded-xl p-2.5 transition-all`}
           aria-label="Profile"
         >
           <Image
@@ -428,32 +432,46 @@ function SidebarContent({
  * The inner content is rendered by SidebarContent.
  */
 export default function Sidebar(props: SidebarProps) {
-  const { isMobileOpen, setIsMobileOpen, isShrunk, setIsShrunk } = props;
+  const { isShrunk, setIsShrunk } = props;
 
   return (
     <>
-      {/* --- Mobile Backdrop --- */}
+      {/* --- Mobile Sidebar (Restored) --- */}
       <AnimatePresence>
-        {isMobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsMobileOpen(false)}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
-          />
+        {props.isMobileOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsShrunk(false)} // Actually closes mobile menu in this context if we wired it up, but setIsMobileOpen is better
+              className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+              // Close on backdrop click
+              onTap={() => props.setIsMobileOpen(false)}
+            />
+
+            {/* Drawer */}
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="md:hidden fixed inset-y-0 left-0 z-50 w-[280px] bg-white dark:bg-gray-950 border-r dark:border-gray-800 p-6 shadow-2xl"
+            >
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => props.setIsMobileOpen(false)}
+                  className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <SidebarContent {...props} isMobile={true} />
+            </motion.aside>
+          </>
         )}
       </AnimatePresence>
-
-      {/* --- Mobile Sidebar --- */}
-      <motion.aside
-        initial={{ x: "-100%" }}
-        animate={{ x: isMobileOpen ? "0%" : "-100%" }}
-        transition={{ type: "tween", duration: 0.3, ease: "easeInOut" }}
-        className="fixed inset-y-0 left-0 z-50 flex w-60 flex-col bg-white dark:bg-gray-950 border-r dark:border-gray-800 p-6 md:hidden"
-      >
-        <SidebarContent {...props} isShrunk={false} isMobile={true} />
-      </motion.aside>
 
       {/* --- Desktop Sidebar (Fixed) --- */}
       <motion.aside

@@ -12,6 +12,11 @@ const options = {
     strict: true,
     deprecationErrors: true,
   },
+  tls: true,
+  tlsAllowInvalidCertificates: false,
+  tlsAllowInvalidHostnames: false,
+  retryWrites: true,
+  w: "majority" as const,
 };
 
 let client: MongoClient;
