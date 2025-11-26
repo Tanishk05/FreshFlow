@@ -159,7 +159,7 @@ export default function NotificationManager() {
   }
 
   // Don't render anything if already granted, denied, or not supported
-  if (permission === "granted" || permission === "denied" || !isSupported) {
+  if (permission === "granted" || !isSupported) {
     return null;
   }
 
