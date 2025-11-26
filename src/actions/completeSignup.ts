@@ -22,8 +22,10 @@ const signupSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   pincode: z.string().optional(),
-  latitude: z.string().optional(),
-  longitude: z.string().optional(),
+  latitude: z.string().min(1, "Latitude is required for delivery calculations"),
+  longitude: z
+    .string()
+    .min(1, "Longitude is required for delivery calculations"),
 });
 
 // --- DEFINE THE STATE SHAPE ---
@@ -123,18 +125,46 @@ export async function completeSignup(
     if (username) updateData.username = username;
     if (phone) updateData.phone = phone;
 
-    // Build address object if any address field is provided
-    if (street || city || state || pincode || latitude || longitude) {
-      updateData.address = {
-        street: street || undefined,
-        city: city || undefined,
-        state: state || undefined,
-        pincode: pincode || undefined,
-        country: "India", // Default country
-        latitude: latitude ? parseFloat(latitude) : undefined,
-        longitude: longitude ? parseFloat(longitude) : undefined,
+    // Validate and build address object - latitude and longitude are now required
+    if (!latitude || !longitude) {
+      return {
+        error: "Location coordinates are required for delivery calculations.",
+        details: undefined,
       };
     }
+
+    const parsedLat = parseFloat(latitude);
+    const parsedLon = parseFloat(longitude);
+
+    if (isNaN(parsedLat) || isNaN(parsedLon)) {
+      return {
+        error: "Invalid coordinates. Please provide valid numbers.",
+        details: undefined,
+      };
+    }
+
+    if (
+      parsedLat < -90 ||
+      parsedLat > 90 ||
+      parsedLon < -180 ||
+      parsedLon > 180
+    ) {
+      return {
+        error:
+          "Coordinates out of range. Latitude: -90 to 90, Longitude: -180 to 180.",
+        details: undefined,
+      };
+    }
+
+    updateData.address = {
+      street: street || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      pincode: pincode || undefined,
+      country: "India", // Default country
+      latitude: parsedLat,
+      longitude: parsedLon,
+    };
 
     await usersCollection.updateOne(
       { _id: new ObjectId(session.user.id) },

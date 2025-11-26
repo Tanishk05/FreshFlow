@@ -81,6 +81,8 @@ export default function CompleteSignupPage() {
 
   const initialState: FormState = { error: null, details: undefined };
   const [state, formAction] = useActionState(completeSignup, initialState);
+  const [isGettingLocation, setIsGettingLocation] = React.useState(false);
+  const [locationError, setLocationError] = React.useState<string | null>(null);
 
   // Redirect if user already has a role
   React.useEffect(() => {
@@ -121,6 +123,42 @@ export default function CompleteSignupPage() {
   // Check if user *needs* to fill in name/username
   const needsProfileData =
     session?.user?.provider === "nodemailer" || !session?.user?.name;
+
+  // Function to get current location
+  const getCurrentLocation = () => {
+    setIsGettingLocation(true);
+    setLocationError(null);
+
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+      setIsGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latInput = document.getElementById(
+          "latitude"
+        ) as HTMLInputElement;
+        const lonInput = document.getElementById(
+          "longitude"
+        ) as HTMLInputElement;
+
+        if (latInput && lonInput) {
+          latInput.value = position.coords.latitude.toFixed(6);
+          lonInput.value = position.coords.longitude.toFixed(6);
+        }
+
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        setLocationError("Unable to get location. Please enter manually.");
+        setIsGettingLocation(false);
+        console.error("Geolocation error:", error);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -246,8 +284,8 @@ export default function CompleteSignupPage() {
               <h3 className="text-sm font-semibold text-gray-900">
                 Address Details
               </h3>
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                Optional
+              <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full font-medium">
+                Required for delivery
               </span>
             </div>
 
@@ -287,43 +325,128 @@ export default function CompleteSignupPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="latitude">Latitude</Label>
-                <Input
-                  id="latitude"
-                  name="latitude"
-                  type="text"
-                  placeholder="19.0760"
-                />
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="latitude" className="mb-0">
+                  Location Coordinates <span className="text-red-500">*</span>
+                </Label>
+                <button
+                  type="button"
+                  onClick={getCurrentLocation}
+                  disabled={isGettingLocation}
+                  className="text-xs font-medium text-green-600 hover:text-green-700 flex items-center gap-1 px-3 py-1 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGettingLocation ? (
+                    <>
+                      <svg
+                        className="animate-spin h-3 w-3"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Getting location...
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                      Auto-fill
+                    </>
+                  )}
+                </button>
               </div>
-              <div>
-                <Label htmlFor="longitude">Longitude</Label>
-                <Input
-                  id="longitude"
-                  name="longitude"
-                  type="text"
-                  placeholder="72.8777"
-                />
-              </div>
-            </div>
 
-            <p className="text-xs text-gray-500 flex items-center">
-              <svg
-                className="h-4 w-4 mr-1.5 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Tip: Use Google Maps to find your coordinates
-            </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Input
+                    id="latitude"
+                    name="latitude"
+                    type="text"
+                    required
+                    placeholder="19.0760"
+                    step="any"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Latitude</p>
+                </div>
+                <div>
+                  <Input
+                    id="longitude"
+                    name="longitude"
+                    type="text"
+                    required
+                    placeholder="72.8777"
+                    step="any"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Longitude</p>
+                </div>
+              </div>
+
+              {locationError && (
+                <p className="text-xs text-red-600 mt-2 flex items-center">
+                  <svg
+                    className="h-4 w-4 mr-1"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {locationError}
+                </p>
+              )}
+
+              <p className="text-xs text-gray-500 flex items-center mt-2">
+                <svg
+                  className="h-4 w-4 mr-1.5 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Click &quot;Auto-fill&quot; or use Google Maps to find
+                coordinates
+              </p>
+            </div>
           </div>
 
           <div className="pt-2">

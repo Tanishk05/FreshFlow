@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import Sidebar from "@/components/dashboard/Sidebar";
+import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
 import MobileBottomNav from "../../../../components/dashboard/MobileBottomNav";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import ModernCard from "@/components/dashboard/shared/ModernCard";
@@ -173,30 +174,26 @@ export default function FarmerOrdersPage() {
           transition={{ type: "tween", duration: 0.3 }}
           className="flex-1 flex flex-col h-full overflow-hidden"
         >
-          {/* Header */}
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold bg-linear-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                  Order Management
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  Track and manage your orders
-                </p>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 bg-linear-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
-              >
-                <span>📊</span>
-                <span>Export Orders</span>
-              </motion.button>
-            </div>
-          </div>
+          <DashboardHeader
+            title="Order Management"
+            onNewPlanClick={() => {}}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+            onAlertsClick={() => setIsAlertsOpen(true)}
+            onExportClick={() => console.log("Export orders")}
+            showNewPlan={false}
+            showExport={true}
+            showAlerts={true}
+            hideMobileMenuButton
+            alertCount={
+              alerts.filter(
+                (a) => a.type === "critical" || a.type === "warning"
+              ).length
+            }
+          />
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6 pb-20 md:pb-6 bg-linear-to-br from-gray-50 via-green-50/30 to-emerald-50/30 dark:from-gray-900 dark:via-green-950/20 dark:to-emerald-950/20">
+          <div className="flex-1 overflow-y-auto p-6 pb-20 md:pb-6 bg-gray-50/50 dark:bg-slate-950/50 custom-scrollbar">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <EnhancedStatCard

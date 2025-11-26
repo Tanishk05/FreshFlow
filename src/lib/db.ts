@@ -12,10 +12,10 @@ const options = {
     strict: true,
     deprecationErrors: true,
   },
-  tls: true,
-  tlsAllowInvalidCertificates: false,
-  tlsAllowInvalidHostnames: false,
-  retryWrites: true,
+  tls: process.env.NEXT_PRODUCTION === "true",
+  tlsAllowInvalidCertificates: process.env.NEXT_PRODUCTION !== "true",
+  tlsAllowInvalidHostnames: process.env.NEXT_PRODUCTION !== "true",
+  retryWrites: process.env.NEXT_PRODUCTION === "true",
   w: "majority" as const,
 };
 

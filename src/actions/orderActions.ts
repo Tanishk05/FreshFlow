@@ -659,6 +659,39 @@ export async function markOrderAsDelivered(orderId: string) {
       }
     );
 
+    // If the order had an assigned truck, update the truck status and assignedOrderIds
+    if (order.assignedTruckId) {
+      const { getFleetCollection } = await import("@/models/Fleet");
+      const fleetCollection = await getFleetCollection();
+      // Remove this order from assignedOrderIds
+      await fleetCollection.updateOne(
+        { _id: order.assignedTruckId },
+        {
+          $pull: { assignedOrderIds: order._id },
+        }
+      );
+      // Check if there are any orders left assigned to this truck
+      const updatedTruck = await fleetCollection.findOne({
+        _id: order.assignedTruckId,
+      });
+      if (
+        !updatedTruck?.assignedOrderIds ||
+        updatedTruck.assignedOrderIds.length === 0
+      ) {
+        // If no more orders, set truck to available and reset currentLoadKg
+        await fleetCollection.updateOne(
+          { _id: order.assignedTruckId },
+          {
+            $set: {
+              status: "available",
+              currentLoadKg: 0,
+              updatedAt: new Date(),
+            },
+          }
+        );
+      }
+    }
+
     // Trigger webhook for order delivered
     await triggerOrderWebhook({
       event: "order.delivered",
@@ -834,32 +867,64 @@ export async function acceptOrderAsDistributor(
     let deliveryAddress = "";
     let estimatedDelivery = new Date();
 
+    const { getDeliveryFee, getWeightInKg, estimateDeliveryTime } =
+      await import("@/lib/deliveryFeeCalculator");
+    const { getDeliveryDistance } = await import("@/lib/distanceCalculator");
+
     if (farmer?.address && retailer?.address) {
-      const { calculateDistance } = await import("@/models/User");
-      const { getDeliveryFee, getWeightInKg, estimateDeliveryTime } =
-        await import("@/lib/deliveryFeeCalculator");
+      // Stricter coordinate validation
+      const fLat = Number(farmer.address.latitude);
+      const fLon = Number(farmer.address.longitude);
+      const rLat = Number(retailer.address.latitude);
+      const rLon = Number(retailer.address.longitude);
 
-      // Calculate distance from farmer to retailer
-      if (
-        farmer.address.latitude &&
-        farmer.address.longitude &&
-        retailer.address.latitude &&
-        retailer.address.longitude
-      ) {
-        distance = calculateDistance(
-          farmer.address.latitude,
-          farmer.address.longitude,
-          retailer.address.latitude,
-          retailer.address.longitude
+      const coordsValid =
+        isFinite(fLat) &&
+        isFinite(fLon) &&
+        isFinite(rLat) &&
+        isFinite(rLon) &&
+        fLat >= -90 &&
+        fLat <= 90 &&
+        fLon >= -180 &&
+        fLon <= 180 &&
+        rLat >= -90 &&
+        rLat <= 90 &&
+        rLon >= -180 &&
+        rLon <= 180;
+
+      if (coordsValid) {
+        const distanceResult = await getDeliveryDistance(
+          fLat,
+          fLon,
+          rLat,
+          rLon
         );
-
-        // Calculate delivery fee based on distance and weight
-        const weightKg = getWeightInKg(order.quantity, order.unit);
-        deliveryFee = getDeliveryFee(distance, weightKg);
-
-        // Estimate delivery time
-        estimatedDelivery = estimateDeliveryTime(distance);
+        distance = distanceResult.distance;
+        if (distanceResult.method !== "driving") {
+          console.warn(
+            `WARNING: Fallback method (${distanceResult.method}) used for order ${orderId}. Coordinates: Farmer(${fLat},${fLon}), Retailer(${rLat},${rLon})`
+          );
+        }
+        console.log(
+          `Distance calculated for order ${orderId}: ${distance}km (method: ${distanceResult.method})`
+        );
+      } else {
+        // Fallback: Use random estimate if coordinates not available or invalid
+        distance = Math.floor(Math.random() * 45) + 10; // 10-55 km
+        console.warn(
+          `WARNING: Invalid or missing coordinates for order ${orderId}. Using fallback distance: ${distance}km. Farmer:`,
+          farmer.address,
+          "Retailer:",
+          retailer.address
+        );
       }
+
+      // Calculate delivery fee based on distance and weight
+      const weightKg = getWeightInKg(order.quantity, order.unit);
+      deliveryFee = getDeliveryFee(distance, weightKg);
+
+      // Estimate delivery time
+      estimatedDelivery = estimateDeliveryTime(distance);
 
       // Set destination and delivery address
       destination = retailer.address.city || "Unknown Location";
@@ -868,6 +933,21 @@ export async function acceptOrderAsDistributor(
       }, ${retailer.address.state || ""} ${
         retailer.address.pincode || ""
       }`.trim();
+
+      console.log(
+        `Order ${orderId} - Distance: ${distance}km, Weight: ${weightKg}kg, Fee: ₹${deliveryFee}`
+      );
+    } else {
+      // Fallback when addresses are missing
+      distance = Math.floor(Math.random() * 45) + 10; // 10-55 km
+      const weightKg = getWeightInKg(order.quantity, order.unit);
+      deliveryFee = getDeliveryFee(distance, weightKg);
+      estimatedDelivery = estimateDeliveryTime(distance);
+      destination = retailer?.name || "Unknown Location";
+      deliveryAddress = "Address not available";
+      console.log(
+        `Using fallback for order ${orderId} - Distance: ${distance}km, Fee: ₹${deliveryFee} (missing addresses)`
+      );
     }
 
     // Update order status to "assigned" and add distributor info with delivery details

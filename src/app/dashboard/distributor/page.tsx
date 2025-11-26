@@ -231,13 +231,18 @@ export default function DistributorDashboard() {
         return;
       }
 
-      // Refresh in-transit orders, delivered orders, and fleet
-      const [inTransitOrdersResult, deliveredOrdersResult, fleetData] =
-        await Promise.all([
-          getDistributorOrdersByStatus("in-transit"),
-          getDistributorOrdersByStatus("delivered"),
-          getMyFleet(),
-        ]);
+      // Refresh in-transit orders, delivered orders, fleet, and earnings
+      const [
+        inTransitOrdersResult,
+        deliveredOrdersResult,
+        fleetData,
+        earningsData,
+      ] = await Promise.all([
+        getDistributorOrdersByStatus("in-transit"),
+        getDistributorOrdersByStatus("delivered"),
+        getMyFleet(),
+        getDistributorEarnings(),
+      ]);
 
       setInTransitOrders(
         inTransitOrdersResult.success && inTransitOrdersResult.data
@@ -250,6 +255,9 @@ export default function DistributorDashboard() {
           : []
       );
       setFleet(fleetData);
+      if (earningsData.success && earningsData.data) {
+        setEarnings(earningsData.data);
+      }
 
       alert("Order marked as delivered successfully! 🎉");
       console.log(`Order ${orderId} has been delivered`);
