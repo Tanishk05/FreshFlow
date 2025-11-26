@@ -133,6 +133,26 @@ export default function NotificationManager() {
     }
   };
 
+  // Check if user previously dismissed notification popup
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const dismissed = localStorage.getItem("ff_notification_dismissed");
+      if (dismissed === "true") {
+        // Only set permission if it is still default
+        if (Notification.permission === "default") {
+          queueMicrotask(() => setPermission("denied"));
+        }
+      }
+    }
+  }, []);
+
+  const handleNotNow = () => {
+    setPermission("denied");
+    if (typeof window !== "undefined") {
+      localStorage.setItem("ff_notification_dismissed", "true");
+    }
+  };
+
   // Don't render anything until mounted (prevents hydration mismatch)
   if (!mounted) {
     return null;
@@ -177,7 +197,7 @@ export default function NotificationManager() {
               Enable
             </button>
             <button
-              onClick={() => setPermission("denied")}
+              onClick={handleNotNow}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             >
               Not Now
