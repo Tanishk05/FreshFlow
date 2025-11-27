@@ -8,6 +8,7 @@ export default function NotificationManager() {
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [isSupported, setIsSupported] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   // Check if push notifications should be enabled (feature flag)
   const pushEnabled =
@@ -136,30 +137,31 @@ export default function NotificationManager() {
   // Check if user previously dismissed notification popup
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const dismissed = localStorage.getItem("ff_notification_dismissed");
-      if (dismissed === "true") {
-        // Only set permission if it is still default
-        if (Notification.permission === "default") {
-          queueMicrotask(() => setPermission("denied"));
-        }
+      const dismissedStorage = localStorage.getItem(
+        "ff_notification_dismissed"
+      );
+      if (dismissedStorage === "true") {
+        queueMicrotask(() => setDismissed(true));
       }
     }
   }, []);
 
   const handleNotNow = () => {
+    setDismissed(true);
     setPermission("denied");
     if (typeof window !== "undefined") {
       localStorage.setItem("ff_notification_dismissed", "true");
     }
   };
 
-  // Don't render anything until mounted (prevents hydration mismatch)
-  if (!mounted) {
-    return null;
-  }
-
-  // Don't render anything if already granted, denied, or not supported
-  if (permission === "granted" || !isSupported) {
+  // Hide popup if granted, not supported, or dismissed
+  if (
+    !mounted ||
+    permission === "granted" ||
+    !isSupported ||
+    dismissed ||
+    permission === "denied"
+  ) {
     return null;
   }
 
