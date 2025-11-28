@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Check, X as XIcon } from "lucide-react";
 import ModernCard from "../shared/ModernCard";
@@ -22,7 +22,37 @@ type Props = {
   onCancel: (id: string) => void;
 };
 
+import { getSocket } from "@/lib/socket";
+
 export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
+  const [liveOrders, setLiveOrders] = React.useState(orders);
+
+  useEffect(() => {
+    setLiveOrders(orders); // Sync with prop changes
+  }, [orders]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on("farmer-order-update", (update: { type: string; order: OrderFromDB }) => {
+      setLiveOrders((prev) => {
+        if (update.type === "add") {
+          if (!prev.some((o) => o._id === update.order._id)) {
+            return [update.order, ...prev];
+          }
+          return prev;
+        } else if (update.type === "update") {
+          return prev.map((o) => (o._id === update.order._id ? { ...o, ...update.order } : o));
+        } else if (update.type === "remove") {
+          return prev.filter((o) => o._id !== update.order._id);
+        }
+        return prev;
+      });
+    });
+    return () => {
+      socket.off("farmer-order-update");
+    };
+  }, []);
+
   return (
     <ModernCard
       title="Pending Orders"
@@ -30,7 +60,7 @@ export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
       gradient="blue"
       glassEffect={false}
     >
-      {orders.length === 0 ? (
+      {liveOrders.length === 0 ? (
         <EmptyState
           icon="✅"
           title="All caught up!"
@@ -39,7 +69,7 @@ export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
       ) : (
         <div className="space-y-3">
           <AnimatePresence>
-            {orders.map((order, idx) => (
+            {liveOrders.map((order, idx) => (
               <motion.div
                 key={order._id}
                 initial={{ opacity: 0, x: -20 }}

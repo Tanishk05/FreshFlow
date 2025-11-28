@@ -2,6 +2,7 @@
 
 "use client";
 import React, { useState, useEffect } from "react";
+import { getSocket } from "@/lib/socket";
 import { motion } from "framer-motion";
 import { User, ShoppingCart, TrendingUp, Package } from "lucide-react";
 import {
@@ -30,7 +31,6 @@ export default function BuyProduce() {
       try {
         setLoading(true);
         const data = await getMarketplaceProduce();
-        // Show only first 5 items
         setProduce(data.slice(0, 5));
       } catch (error) {
         console.error("Error fetching produce:", error);
@@ -39,6 +39,31 @@ export default function BuyProduce() {
       }
     }
     fetchProduce();
+
+    const socket = getSocket();
+    socket.on(
+      "retailer-marketplace-update",
+      (update: { type: string; produce: MarketplaceProduce }) => {
+        setProduce((prev) => {
+          if (update.type === "add") {
+            if (!prev.some((p) => p._id === update.produce._id)) {
+              return [update.produce, ...prev].slice(0, 5);
+            }
+            return prev;
+          } else if (update.type === "update") {
+            return prev.map((p) =>
+              p._id === update.produce._id ? { ...p, ...update.produce } : p
+            );
+          } else if (update.type === "remove") {
+            return prev.filter((p) => p._id !== update.produce._id);
+          }
+          return prev;
+        });
+      }
+    );
+    return () => {
+      socket.off("retailer-marketplace-update");
+    };
   }, []);
 
   return (

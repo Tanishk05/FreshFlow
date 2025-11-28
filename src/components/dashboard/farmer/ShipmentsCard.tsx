@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, Ship, Thermometer } from "lucide-react";
 import ModernCard from "../shared/ModernCard";
@@ -17,8 +17,36 @@ type Props = {
   shipments: ShipmentFromDB[];
 };
 
+import { getSocket } from "@/lib/socket";
+
 export default function ShipmentsCard({ shipments }: Props) {
-  return (
+  const [liveShipments, setLiveShipments] = useState(shipments);
+
+  useEffect(() => {
+    setLiveShipments(shipments); // Sync with prop changes
+  }, [shipments]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on("farmer-shipment-update", (update: { type: string; shipment: ShipmentFromDB }) => {
+      setLiveShipments((prev) => {
+        if (update.type === "add") {
+          if (!prev.some((s) => s._id === update.shipment._id)) {
+            return [update.shipment, ...prev];
+          }
+          return prev;
+        } else if (update.type === "update") {
+          return prev.map((s) => (s._id === update.shipment._id ? { ...s, ...update.shipment } : s));
+        } else if (update.type === "remove") {
+          return prev.filter((s) => s._id !== update.shipment._id);
+        }
+        return prev;
+      });
+    });
+    return () => {
+      socket.off("farmer-shipment-update");
+    };
+  }, []);
     <ModernCard
       title="Live Shipments"
       icon={<Ship className="w-5 h-5" />}
@@ -30,7 +58,7 @@ export default function ShipmentsCard({ shipments }: Props) {
         </button>
       }
     >
-      {shipments.length === 0 ? (
+      {liveShipments.length === 0 ? (
         <EmptyState
           icon="📦"
           title="No active shipments"
@@ -38,7 +66,7 @@ export default function ShipmentsCard({ shipments }: Props) {
         />
       ) : (
         <div className="space-y-3">
-          {shipments.map((shipment, idx) => {
+          {liveShipments.map((shipment, idx) => {
             const isDelayed = shipment.status === "delayed";
             const isHot = shipment.temperatureC > 6;
             const hasAlert = isDelayed || isHot;
@@ -154,5 +182,4 @@ export default function ShipmentsCard({ shipments }: Props) {
         </div>
       )}
     </ModernCard>
-  );
 }

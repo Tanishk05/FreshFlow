@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArchiveX, Package } from "lucide-react";
 import ModernCard from "../shared/ModernCard";
@@ -38,9 +38,36 @@ const ShelfLifeBadge = ({ days }: { days: number }) => {
   );
 };
 
-export default function StoreInventory({ inventory, onMarkSpoiled }: Props) {
+  import { getSocket } from "@/lib/socket";
   const router = useRouter();
-  const activeInventory = inventory.filter((item) => item.status !== "spoiled");
+  const [liveInventory, setLiveInventory] = useState(inventory);
+
+  useEffect(() => {
+    setLiveInventory(inventory);
+  }, [inventory]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on("retailer-inventory-update", (update: { type: string; item: StoreItem }) => {
+      setLiveInventory((prev) => {
+        if (update.type === "add") {
+          if (!prev.some((i) => i._id === update.item._id)) {
+            return [update.item, ...prev];
+          }
+          return prev;
+        } else if (update.type === "update") {
+          return prev.map((i) => (i._id === update.item._id ? { ...i, ...update.item } : i));
+        } else if (update.type === "remove") {
+          return prev.filter((i) => i._id !== update.item._id);
+        }
+        return prev;
+      });
+    });
+    return () => {
+      socket.off("retailer-inventory-update");
+    };
+  }, []);
+  const activeInventory = liveInventory.filter((item) => item.status !== "spoiled");
 
   return (
     <ModernCard

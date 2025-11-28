@@ -21,6 +21,7 @@ import ModernCard from "@/components/dashboard/shared/ModernCard";
 import LoadingSpinner from "@/components/dashboard/shared/LoadingSpinner";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import ActionButton from "@/components/dashboard/shared/ActionButton";
+import { getSocket } from "@/lib/socket";
 
 type OrderWithDetails = {
   _id: string;
@@ -59,6 +60,34 @@ export default function OrderBook({ minPayout }: OrderBookProps) {
   useEffect(() => {
     fetchOrders();
     fetchTrucks();
+    // WebSocket: Listen for new/updated orders in real time
+    const socket = getSocket();
+    socket.on(
+      "order-book-update",
+      (update: { type: string; order: OrderWithDetails }) => {
+        setJobs((prev) => {
+          if (update.type === "add") {
+            // Add new order if not present
+            if (!prev.some((job) => job._id === update.order._id)) {
+              return [update.order, ...prev];
+            }
+            return prev;
+          } else if (update.type === "update") {
+            // Update order if present
+            return prev.map((job) =>
+              job._id === update.order._id ? { ...job, ...update.order } : job
+            );
+          } else if (update.type === "remove") {
+            // Remove order if present
+            return prev.filter((job) => job._id !== update.order._id);
+          }
+          return prev;
+        });
+      }
+    );
+    return () => {
+      socket.off("order-book-update");
+    };
   }, []);
 
   const fetchOrders = async () => {

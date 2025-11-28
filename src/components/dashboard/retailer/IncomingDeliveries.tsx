@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { PurchaseOrder } from "@/lib/data/types";
 import { Thermometer, Clock, Truck, Package, MapPin } from "lucide-react";
@@ -12,9 +12,36 @@ type Props = {
   deliveries: PurchaseOrder[];
 };
 
-export default function IncomingDeliveries({ deliveries }: Props) {
+  import { getSocket } from "@/lib/socket";
+  const [liveDeliveries, setLiveDeliveries] = useState(deliveries);
+
+  useEffect(() => {
+    setLiveDeliveries(deliveries);
+  }, [deliveries]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on("retailer-delivery-update", (update: { type: string; delivery: PurchaseOrder }) => {
+      setLiveDeliveries((prev) => {
+        if (update.type === "add") {
+          if (!prev.some((d) => d.id === update.delivery.id)) {
+            return [update.delivery, ...prev];
+          }
+          return prev;
+        } else if (update.type === "update") {
+          return prev.map((d) => (d.id === update.delivery.id ? { ...d, ...update.delivery } : d));
+        } else if (update.type === "remove") {
+          return prev.filter((d) => d.id !== update.delivery.id);
+        }
+        return prev;
+      });
+    });
+    return () => {
+      socket.off("retailer-delivery-update");
+    };
+  }, []);
   // Check if any delivery has temperature issues
-  const hasTemperatureAlerts = deliveries.some((d) => d.liveTemperature > 4);
+  const hasTemperatureAlerts = liveDeliveries.some((d) => d.liveTemperature > 4);
 
   return (
     <ModernCard
@@ -23,7 +50,7 @@ export default function IncomingDeliveries({ deliveries }: Props) {
       gradient="blue"
       glassEffect={false}
     >
-      {deliveries.length === 0 ? (
+      {liveDeliveries.length === 0 ? (
         <EmptyState
           icon={<Truck className="w-12 h-12" />}
           title="No Incoming Deliveries"
@@ -55,7 +82,7 @@ export default function IncomingDeliveries({ deliveries }: Props) {
 
           {/* Deliveries List */}
           <div className="space-y-3">
-            {deliveries.slice(0, 5).map((delivery, idx) => {
+            {liveDeliveries.slice(0, 5).map((delivery, idx) => {
               const isHot = delivery.liveTemperature > 4;
 
               return (
@@ -194,7 +221,7 @@ export default function IncomingDeliveries({ deliveries }: Props) {
           </div>
 
           {/* View All Link */}
-          {deliveries.length > 5 && (
+          {liveDeliveries.length > 5 && (
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -204,7 +231,7 @@ export default function IncomingDeliveries({ deliveries }: Props) {
                 window.location.href = "/dashboard/retailer/deliveries";
               }}
             >
-              View All {deliveries.length} Deliveries →
+              View All {liveDeliveries.length} Deliveries →
             </motion.button>
           )}
         </>

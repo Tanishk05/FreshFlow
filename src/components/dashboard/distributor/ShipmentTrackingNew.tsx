@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Package,
@@ -16,6 +16,7 @@ import {
 import ModernCard from "@/components/dashboard/shared/ModernCard";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import ActionButton from "@/components/dashboard/shared/ActionButton";
+import { getSocket } from "@/lib/socket";
 
 type DistributorOrder = {
   _id: string;
@@ -96,13 +97,42 @@ export default function ShipmentTrackingNew({
   onStartDelivery,
 }: Props) {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [liveOrders, setLiveOrders] = useState<DistributorOrder[]>(orders);
+
+  useEffect(() => {
+    setLiveOrders(orders);
+  }, [orders]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    // Listen for order status updates
+    socket.on(
+      "order-status-update",
+      (update: {
+        orderId: string;
+        status: string;
+        updatedFields?: Partial<DistributorOrder>;
+      }) => {
+        setLiveOrders((prev) =>
+          prev.map((order) =>
+            order._id === update.orderId
+              ? { ...order, status: update.status, ...update.updatedFields }
+              : order
+          )
+        );
+      }
+    );
+    return () => {
+      socket.off("order-status-update");
+    };
+  }, []);
 
   const toggleExpand = (orderId: string) => {
     setExpandedOrder(expandedOrder === orderId ? null : orderId);
   };
 
   // Filter picked-up and in-transit orders for this component
-  const activeOrders = orders.filter(
+  const activeOrders = liveOrders.filter(
     (o) => o.status === "picked-up" || o.status === "in-transit"
   );
 

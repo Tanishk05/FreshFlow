@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getSocket } from "@/lib/socket";
 import { getMyNotifications, markAsRead } from "@/actions/notificationActions";
 import { Notification } from "@/models/Notification";
 
@@ -20,6 +21,32 @@ export default function NotificationPanel({
 
   useEffect(() => {
     loadNotifications();
+    const socket = getSocket();
+    socket.on(
+      "notification-update",
+      (update: { type: string; notification: Notification }) => {
+        setNotifications((prev) => {
+          if (update.type === "add") {
+            if (!prev.some((n) => n._id === update.notification._id)) {
+              return [update.notification, ...prev];
+            }
+            return prev;
+          } else if (update.type === "update") {
+            return prev.map((n) =>
+              n._id === update.notification._id
+                ? { ...n, ...update.notification }
+                : n
+            );
+          } else if (update.type === "remove") {
+            return prev.filter((n) => n._id !== update.notification._id);
+          }
+          return prev;
+        });
+      }
+    );
+    return () => {
+      socket.off("notification-update");
+    };
   }, []);
 
   const loadNotifications = async () => {

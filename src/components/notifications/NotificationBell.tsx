@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getSocket } from "@/lib/socket";
 import { getUnreadCount, markAllAsRead } from "@/actions/notificationActions";
 import NotificationPanel from "./NotificationPanel";
 
@@ -9,7 +10,7 @@ export default function NotificationBell() {
   const [showPanel, setShowPanel] = useState(false);
 
   useEffect(() => {
-    // Load initial count and set up polling
+    // Load initial count
     const loadCount = async () => {
       try {
         const count = await getUnreadCount();
@@ -18,17 +19,21 @@ export default function NotificationBell() {
         console.error("Error loading unread count:", error);
       }
     };
-
-    // Initial load
     loadCount().catch(console.error);
 
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(() => {
-      loadCount().catch(console.error);
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []); // Empty deps - only run once on mount
+    // WebSocket: update unread count in real time
+    const socket = getSocket();
+    socket.on(
+      "notification-update",
+      (update: { type: string; notification: any }) => {
+        // For simplicity, just reload the count on any notification event
+        loadCount().catch(console.error);
+      }
+    );
+    return () => {
+      socket.off("notification-update");
+    };
+  }, []);
 
   const handleMarkAllAsRead = async () => {
     try {

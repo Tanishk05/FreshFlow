@@ -5,6 +5,9 @@ import { completeSignup, FormState } from "@/actions/completeSignup";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import React, { useActionState } from "react";
+import dynamic from "next/dynamic";
+import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
+import GoogleLocationPicker from "@/components/ui/GoogleLocationPicker";
 
 // --- Styled UI Components ---
 
@@ -83,6 +86,12 @@ export default function CompleteSignupPage() {
   const [state, formAction] = useActionState(completeSignup, initialState);
   const [isGettingLocation, setIsGettingLocation] = React.useState(false);
   const [locationError, setLocationError] = React.useState<string | null>(null);
+  const [lat, setLat] = React.useState<number>(19.076); // Default: Mumbai
+  const [lng, setLng] = React.useState<number>(72.8777);
+  const [address, setAddress] = React.useState<string>("");
+  const [city, setCity] = React.useState<string>("");
+  const [stateName, setStateName] = React.useState<string>("");
+  const [pincode, setPincode] = React.useState<string>("");
 
   // Redirect if user already has a role
   React.useEffect(() => {
@@ -124,35 +133,66 @@ export default function CompleteSignupPage() {
   const needsProfileData =
     session?.user?.provider === "nodemailer" || !session?.user?.name;
 
-  // Function to get current location
+  // Function to get current location and update all fields
   const getCurrentLocation = () => {
     setIsGettingLocation(true);
     setLocationError(null);
-
     if (!navigator.geolocation) {
       setLocationError("Geolocation is not supported by your browser");
       setIsGettingLocation(false);
       return;
     }
-
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const latInput = document.getElementById(
-          "latitude"
-        ) as HTMLInputElement;
-        const lonInput = document.getElementById(
-          "longitude"
-        ) as HTMLInputElement;
-
-        if (latInput && lonInput) {
-          latInput.value = position.coords.latitude.toFixed(6);
-          lonInput.value = position.coords.longitude.toFixed(6);
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setLat(lat);
+        setLng(lng);
+        // Reverse geocode to get address fields
+        if (window.google) {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === "OK" && results && results[0]) {
+              let address = results[0].formatted_address || "";
+              let city = "";
+              let state = "";
+              let pincode = "";
+              for (const comp of results[0].address_components) {
+                if (comp.types.includes("locality")) city = comp.long_name;
+                if (comp.types.includes("administrative_area_level_1"))
+                  state = comp.long_name;
+                if (comp.types.includes("postal_code"))
+                  pincode = comp.long_name;
+              }
+              if (!address && results[0].address_components) {
+                address = results[0].address_components
+                  .map((c) => c.long_name)
+                  .join(", ");
+              }
+              setAddress(address);
+              setCity(city);
+              setStateName(state);
+              setPincode(pincode);
+            } else {
+              setAddress("");
+              setCity("");
+              setStateName("");
+              setPincode("");
+            }
+            setIsGettingLocation(false);
+          });
+        } else {
+          setAddress("");
+          setCity("");
+          setStateName("");
+          setPincode("");
+          setIsGettingLocation(false);
         }
-
-        setIsGettingLocation(false);
       },
       (error) => {
-        setLocationError("Unable to get location. Please enter manually.");
+        setLocationError(
+          "Unable to get location. Please select manually on the map."
+        );
         setIsGettingLocation(false);
         console.error("Geolocation error:", error);
       },
@@ -290,19 +330,35 @@ export default function CompleteSignupPage() {
             </div>
 
             <div>
-              <Label htmlFor="street">Street Address</Label>
-              <Input
-                id="street"
-                name="street"
-                type="text"
-                placeholder="123 Main St"
+              <Label htmlFor="address">Address</Label>
+              <AddressAutocomplete
+                value={address}
+                onChange={(addr, newLat, newLng, city, state, pincode) => {
+                  setAddress(addr);
+                  if (newLat && newLng) {
+                    setLat(newLat);
+                    setLng(newLng);
+                  }
+                  if (city) setCity(city);
+                  if (state) setStateName(state);
+                  if (pincode) setPincode(pincode);
+                }}
+                placeholder="Search for your address..."
               />
+              <input type="hidden" id="street" name="street" value={address} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="city">City</Label>
-                <Input id="city" name="city" type="text" placeholder="Mumbai" />
+                <Input
+                  id="city"
+                  name="city"
+                  type="text"
+                  placeholder="Mumbai"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="state">State</Label>
@@ -311,6 +367,8 @@ export default function CompleteSignupPage() {
                   name="state"
                   type="text"
                   placeholder="Maharashtra"
+                  value={stateName}
+                  onChange={(e) => setStateName(e.target.value)}
                 />
               </div>
             </div>
@@ -322,13 +380,15 @@ export default function CompleteSignupPage() {
                 name="pincode"
                 type="text"
                 placeholder="400001"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value)}
               />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label htmlFor="latitude" className="mb-0">
-                  Location Coordinates <span className="text-red-500">*</span>
+                <Label className="mb-0">
+                  Select Location on Map <span className="text-red-500">*</span>
                 </Label>
                 <button
                   type="button"
@@ -381,37 +441,49 @@ export default function CompleteSignupPage() {
                           d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                         />
                       </svg>
-                      Auto-fill
+                      Use My Location
                     </>
                   )}
                 </button>
               </div>
-
+              <GoogleLocationPicker
+                lat={lat}
+                lng={lng}
+                onChange={(newLat, newLng, addr, city, state, pincode) => {
+                  setLat(newLat);
+                  setLng(newLng);
+                  if (addr) setAddress(addr);
+                  if (city) setCity(city);
+                  if (state) setStateName(state);
+                  if (pincode) setPincode(pincode);
+                }}
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Input
+                  <input
+                    type="hidden"
                     id="latitude"
                     name="latitude"
-                    type="text"
-                    required
-                    placeholder="19.0760"
-                    step="any"
+                    value={lat}
+                    readOnly
                   />
-                  <p className="text-xs text-gray-500 mt-1">Latitude</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Latitude: {lat.toFixed(6)}
+                  </p>
                 </div>
                 <div>
-                  <Input
+                  <input
+                    type="hidden"
                     id="longitude"
                     name="longitude"
-                    type="text"
-                    required
-                    placeholder="72.8777"
-                    step="any"
+                    value={lng}
+                    readOnly
                   />
-                  <p className="text-xs text-gray-500 mt-1">Longitude</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Longitude: {lng.toFixed(6)}
+                  </p>
                 </div>
               </div>
-
               {locationError && (
                 <p className="text-xs text-red-600 mt-2 flex items-center">
                   <svg
@@ -428,7 +500,6 @@ export default function CompleteSignupPage() {
                   {locationError}
                 </p>
               )}
-
               <p className="text-xs text-gray-500 flex items-center mt-2">
                 <svg
                   className="h-4 w-4 mr-1.5 text-gray-400"
@@ -443,8 +514,8 @@ export default function CompleteSignupPage() {
                     d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                Click &quot;Auto-fill&quot; or use Google Maps to find
-                coordinates
+                Click on the map or use &quot;Use My Location&quot; to set your
+                address.
               </p>
             </div>
           </div>

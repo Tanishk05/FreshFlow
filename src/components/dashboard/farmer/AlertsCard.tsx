@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell,
@@ -62,10 +62,45 @@ type Props = {
   onOpenPanel?: () => void;
 };
 
+import { getSocket } from "@/lib/socket";
+
 export default function AlertsCard({ alerts, onOpenPanel }: Props) {
+  const [liveAlerts, setLiveAlerts] = useState(alerts);
+
+  useEffect(() => {
+    setLiveAlerts(alerts); // Sync with prop changes
+  }, [alerts]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on(
+      "farmer-alert-update",
+      (update: { type: string; alert: Alert }) => {
+        setLiveAlerts((prev) => {
+          if (update.type === "add") {
+            if (!prev.some((a) => a.id === update.alert.id)) {
+              return [update.alert, ...prev];
+            }
+            return prev;
+          } else if (update.type === "update") {
+            return prev.map((a) =>
+              a.id === update.alert.id ? { ...a, ...update.alert } : a
+            );
+          } else if (update.type === "remove") {
+            return prev.filter((a) => a.id !== update.alert.id);
+          }
+          return prev;
+        });
+      }
+    );
+    return () => {
+      socket.off("farmer-alert-update");
+    };
+  }, []);
+
   // Show only top 4 most important alerts
-  const displayAlerts = alerts.slice(0, 4);
-  const hasMore = alerts.length > 4;
+  const displayAlerts = liveAlerts.slice(0, 4);
+  const hasMore = liveAlerts.length > 4;
 
   return (
     <ModernCard
@@ -75,14 +110,14 @@ export default function AlertsCard({ alerts, onOpenPanel }: Props) {
       glassEffect
     >
       {/* Alert Count Badge */}
-      {alerts.length > 0 && (
+      {liveAlerts.length > 0 && (
         <div className="absolute top-4 right-4">
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
           >
-            {alerts.length} {alerts.length === 1 ? "Alert" : "Alerts"}
+            {liveAlerts.length} {liveAlerts.length === 1 ? "Alert" : "Alerts"}
           </motion.span>
         </div>
       )}
@@ -192,7 +227,7 @@ export default function AlertsCard({ alerts, onOpenPanel }: Props) {
           >
             <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-center">
               <div className="text-lg font-bold text-red-600 dark:text-red-400">
-                {alerts.filter((a) => a.type === "critical").length}
+                {liveAlerts.filter((a) => a.type === "critical").length}
               </div>
               <div className="text-xs text-gray-600 dark:text-gray-400">
                 Critical
@@ -200,7 +235,7 @@ export default function AlertsCard({ alerts, onOpenPanel }: Props) {
             </div>
             <div className="p-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-center">
               <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
-                {alerts.filter((a) => a.type === "warning").length}
+                {liveAlerts.filter((a) => a.type === "warning").length}
               </div>
               <div className="text-xs text-gray-600 dark:text-gray-400">
                 Warning
@@ -209,7 +244,7 @@ export default function AlertsCard({ alerts, onOpenPanel }: Props) {
             <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-center">
               <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
                 {
-                  alerts.filter(
+                  liveAlerts.filter(
                     (a) => a.type === "info" || a.type === "reminder"
                   ).length
                 }
