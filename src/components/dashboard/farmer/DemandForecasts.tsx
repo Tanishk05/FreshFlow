@@ -40,7 +40,12 @@ export default function DemandForecasts({ allCropsData, statusData }: Props) {
             </span>
           </div>
           <div className="w-full h-72 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
-            <ResponsiveContainer>
+            <ResponsiveContainer
+              width="100%"
+              height={250}
+              minWidth={200}
+              minHeight={150}
+            >
               <BarChart data={allCropsData}>
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -106,7 +111,12 @@ export default function DemandForecasts({ allCropsData, statusData }: Props) {
             </span>
           </div>
           <div className="w-full h-72 p-4 rounded-xl bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
-            <ResponsiveContainer>
+            <ResponsiveContainer
+              width="100%"
+              height={250}
+              minWidth={200}
+              minHeight={150}
+            >
               <BarChart data={statusData}>
                 <CartesianGrid
                   strokeDasharray="3 3"

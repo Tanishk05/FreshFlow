@@ -31,7 +31,7 @@ export default function GoogleLocationPicker({
   onChange,
 }: GoogleLocationPickerProps) {
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: "AIzaSyCwOoYwi0H-XjLNCPF9UybCAsrPnFb8Xdo",
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries: ["places"],
   });
 
