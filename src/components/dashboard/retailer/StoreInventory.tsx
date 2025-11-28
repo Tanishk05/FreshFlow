@@ -204,3 +204,5 @@ const ShelfLifeBadge = ({ days }: { days: number }) => {
     </ModernCard>
   );
 }
+
+export default StoreInventory;

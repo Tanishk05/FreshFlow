@@ -239,3 +239,5 @@ type Props = {
     </ModernCard>
   );
 }
+
+export default IncomingDeliveries;

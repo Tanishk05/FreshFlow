@@ -28,25 +28,32 @@ export default function ShipmentsCard({ shipments }: Props) {
 
   useEffect(() => {
     const socket = getSocket();
-    socket.on("farmer-shipment-update", (update: { type: string; shipment: ShipmentFromDB }) => {
-      setLiveShipments((prev) => {
-        if (update.type === "add") {
-          if (!prev.some((s) => s._id === update.shipment._id)) {
-            return [update.shipment, ...prev];
+    socket.on(
+      "farmer-shipment-update",
+      (update: { type: string; shipment: ShipmentFromDB }) => {
+        setLiveShipments((prev) => {
+          if (update.type === "add") {
+            if (!prev.some((s) => s._id === update.shipment._id)) {
+              return [update.shipment, ...prev];
+            }
+            return prev;
+          } else if (update.type === "update") {
+            return prev.map((s) =>
+              s._id === update.shipment._id ? { ...s, ...update.shipment } : s
+            );
+          } else if (update.type === "remove") {
+            return prev.filter((s) => s._id !== update.shipment._id);
           }
           return prev;
-        } else if (update.type === "update") {
-          return prev.map((s) => (s._id === update.shipment._id ? { ...s, ...update.shipment } : s));
-        } else if (update.type === "remove") {
-          return prev.filter((s) => s._id !== update.shipment._id);
-        }
-        return prev;
-      });
-    });
+        });
+      }
+    );
     return () => {
       socket.off("farmer-shipment-update");
     };
   }, []);
+
+  return (
     <ModernCard
       title="Live Shipments"
       icon={<Ship className="w-5 h-5" />}
@@ -182,4 +189,5 @@ export default function ShipmentsCard({ shipments }: Props) {
         </div>
       )}
     </ModernCard>
+  );
 }
