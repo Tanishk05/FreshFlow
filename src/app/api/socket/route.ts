@@ -1,17 +1,12 @@
 import { Server } from "socket.io";
 import { NextRequest } from "next/server";
-import { NextApiResponseServerIO } from "@/types/next";
 
-// Disable body parsing for this route
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// Use force-dynamic for app router API routes that need dynamic behavior
+export const dynamic = "force-dynamic";
 
 let io: Server | undefined;
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   if (!io) {
     const globalWithServer = global as typeof globalThis & {
       server?: unknown;

@@ -15,10 +15,15 @@ export async function POST(req: NextRequest) {
   try {
     const usersCollection = await getUsersCollection();
     const user = await usersCollection.findOne({ resetToken: token });
+    // Type guard for resetTokenExpires
+    const resetTokenExpires =
+      user && typeof user === "object" && user !== null && "resetTokenExpires" in user
+        ? (user as { resetTokenExpires: string }).resetTokenExpires
+        : undefined;
     if (
       !user ||
-      !user.resetTokenExpires ||
-      new Date(user.resetTokenExpires) < new Date()
+      !resetTokenExpires ||
+      new Date(resetTokenExpires) < new Date()
     ) {
       return NextResponse.json(
         { error: "Invalid or expired token" },
