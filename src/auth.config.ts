@@ -1,5 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 import { User as DbUser } from "@/models/User";
 import { authorizeUser } from "@/lib/auth-handlers";
 import { getUsersCollection } from "@/models/User";
@@ -10,7 +12,57 @@ export default {
   session: { strategy: "jwt" },
 
   // 2. Add providers that DON'T need an adapter
-  providers: [Google],
+  providers: [
+    Google,
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: {
+          label: "Email",
+          type: "email",
+          placeholder: "you@company.com",
+        },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        // Real user lookup and password check
+        const usersCollection = await getUsersCollection();
+        const user = await usersCollection.findOne({
+          email: credentials?.email as string,
+        });
+        if (
+          user &&
+          typeof credentials?.password === "string" &&
+          typeof user.password === "string" &&
+          user.password.length > 0
+        ) {
+          // Block login if not verified
+          if (!user.emailVerified) {
+            // Return null for unverified users so login fails gracefully
+            return null;
+          }
+          // Compare hashed password
+          const isValid = await bcrypt.compare(
+            credentials.password,
+            user.password
+          );
+          if (isValid) {
+            return {
+              id: user._id.toString(),
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              isAdmin: user.isAdmin || false,
+              image: user.image || null,
+              username: user.username || null,
+            };
+          }
+        }
+        // If login fails, return null
+        return null;
+      },
+    }),
+  ],
 
   // 3. Add ALL callbacks
   callbacks: {

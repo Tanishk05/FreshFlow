@@ -12,8 +12,10 @@ type Props = {
   deliveries: PurchaseOrder[];
 };
 
-  import { getSocket } from "@/lib/socket";
-  const [liveDeliveries, setLiveDeliveries] = useState(deliveries);
+import { getSocket } from "@/lib/socket";
+
+const IncomingDeliveries: React.FC<Props> = ({ deliveries }) => {
+  const [liveDeliveries, setLiveDeliveries] = useState<PurchaseOrder[]>(deliveries);
 
   useEffect(() => {
     setLiveDeliveries(deliveries);
@@ -22,16 +24,16 @@ type Props = {
   useEffect(() => {
     const socket = getSocket();
     socket.on("retailer-delivery-update", (update: { type: string; delivery: PurchaseOrder }) => {
-      setLiveDeliveries((prev) => {
+      setLiveDeliveries((prev: PurchaseOrder[]) => {
         if (update.type === "add") {
-          if (!prev.some((d) => d.id === update.delivery.id)) {
+          if (!prev.some((d: PurchaseOrder) => d.id === update.delivery.id)) {
             return [update.delivery, ...prev];
           }
           return prev;
         } else if (update.type === "update") {
-          return prev.map((d) => (d.id === update.delivery.id ? { ...d, ...update.delivery } : d));
+          return prev.map((d: PurchaseOrder) => (d.id === update.delivery.id ? { ...d, ...update.delivery } : d));
         } else if (update.type === "remove") {
-          return prev.filter((d) => d.id !== update.delivery.id);
+          return prev.filter((d: PurchaseOrder) => d.id !== update.delivery.id);
         }
         return prev;
       });
@@ -41,7 +43,7 @@ type Props = {
     };
   }, []);
   // Check if any delivery has temperature issues
-  const hasTemperatureAlerts = liveDeliveries.some((d) => d.liveTemperature > 4);
+  const hasTemperatureAlerts = liveDeliveries.some((d: PurchaseOrder) => d.liveTemperature > 4);
 
   return (
     <ModernCard
@@ -82,7 +84,7 @@ type Props = {
 
           {/* Deliveries List */}
           <div className="space-y-3">
-            {liveDeliveries.slice(0, 5).map((delivery, idx) => {
+            {liveDeliveries.slice(0, 5).map((delivery: PurchaseOrder, idx: number) => {
               const isHot = delivery.liveTemperature > 4;
 
               return (
@@ -238,6 +240,6 @@ type Props = {
       )}
     </ModernCard>
   );
-}
+};
 
 export default IncomingDeliveries;

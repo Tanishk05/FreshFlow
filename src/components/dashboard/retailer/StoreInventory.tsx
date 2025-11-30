@@ -38,9 +38,11 @@ const ShelfLifeBadge = ({ days }: { days: number }) => {
   );
 };
 
-  import { getSocket } from "@/lib/socket";
+import { getSocket } from "@/lib/socket";
+
+const StoreInventory: React.FC<Props> = ({ inventory, onMarkSpoiled }) => {
   const router = useRouter();
-  const [liveInventory, setLiveInventory] = useState(inventory);
+  const [liveInventory, setLiveInventory] = useState<StoreItem[]>(inventory);
 
   useEffect(() => {
     setLiveInventory(inventory);
@@ -49,16 +51,16 @@ const ShelfLifeBadge = ({ days }: { days: number }) => {
   useEffect(() => {
     const socket = getSocket();
     socket.on("retailer-inventory-update", (update: { type: string; item: StoreItem }) => {
-      setLiveInventory((prev) => {
+      setLiveInventory((prev: StoreItem[]) => {
         if (update.type === "add") {
-          if (!prev.some((i) => i._id === update.item._id)) {
+          if (!prev.some((i: StoreItem) => i._id === update.item._id)) {
             return [update.item, ...prev];
           }
           return prev;
         } else if (update.type === "update") {
-          return prev.map((i) => (i._id === update.item._id ? { ...i, ...update.item } : i));
+          return prev.map((i: StoreItem) => (i._id === update.item._id ? { ...i, ...update.item } : i));
         } else if (update.type === "remove") {
-          return prev.filter((i) => i._id !== update.item._id);
+          return prev.filter((i: StoreItem) => i._id !== update.item._id);
         }
         return prev;
       });
@@ -67,7 +69,7 @@ const ShelfLifeBadge = ({ days }: { days: number }) => {
       socket.off("retailer-inventory-update");
     };
   }, []);
-  const activeInventory = liveInventory.filter((item) => item.status !== "spoiled");
+  const activeInventory = liveInventory.filter((item: StoreItem) => item.status !== "spoiled");
 
   return (
     <ModernCard
@@ -97,7 +99,7 @@ const ShelfLifeBadge = ({ days }: { days: number }) => {
       ) : (
         <div className="space-y-3">
           <AnimatePresence>
-            {activeInventory.slice(0, 5).map((item, idx) => {
+            {activeInventory.slice(0, 5).map((item: StoreItem, idx: number) => {
               const isLowStock = item.stock <= item.reorderPoint;
               const isExpiring = item.shelfLifeDays <= 4;
 
@@ -203,6 +205,6 @@ const ShelfLifeBadge = ({ days }: { days: number }) => {
       )}
     </ModernCard>
   );
-}
+};
 
 export default StoreInventory;

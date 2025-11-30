@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 
 interface GoogleLocationPickerProps {
   lat: number;
@@ -14,6 +14,9 @@ interface GoogleLocationPickerProps {
     pincode?: string
   ) => void;
 }
+
+import type { Library } from "@googlemaps/js-api-loader";
+const GOOGLE_MAPS_LIBRARIES: Library[] = ["places", "marker"];
 
 const containerStyle = {
   width: "100%",
@@ -31,17 +34,50 @@ export default function GoogleLocationPicker({
   onChange,
 }: GoogleLocationPickerProps) {
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: ["places"],
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY!,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const [map, setMap] = React.useState<google.maps.Map | null>(null);
+  const markerRef =
+    React.useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
 
+  // Pan map to new location when lat/lng changes
   React.useEffect(() => {
     if (map) {
       map.panTo({ lat, lng });
     }
   }, [lat, lng, map]);
+
+  // Add or update AdvancedMarkerElement
+  React.useEffect(() => {
+    if (
+      !map ||
+      !window.google ||
+      !window.google.maps ||
+      !window.google.maps.marker
+    )
+      return;
+    const { AdvancedMarkerElement } = window.google.maps.marker;
+    // Remove previous marker if exists
+    if (markerRef.current) {
+      markerRef.current.map = null;
+      markerRef.current = null;
+    }
+    // Create new advanced marker
+    markerRef.current = new AdvancedMarkerElement({
+      map,
+      position: { lat, lng },
+      title: "Selected Location",
+    });
+    // Clean up on unmount
+    return () => {
+      if (markerRef.current) {
+        markerRef.current.map = null;
+        markerRef.current = null;
+      }
+    };
+  }, [map, lat, lng]);
 
   if (!isLoaded)
     return (
@@ -99,10 +135,9 @@ export default function GoogleLocationPicker({
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: false,
+          mapId: process.env.GOOGLE_MAPS_ID, // Use your real mapId here
         }}
-      >
-        <Marker position={{ lat, lng }} />
-      </GoogleMap>
+      />
     </div>
   );
 }

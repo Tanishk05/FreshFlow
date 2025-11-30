@@ -7,6 +7,9 @@ import { useFormStatus } from "react-dom";
 import React, { useActionState } from "react";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import GoogleLocationPicker from "@/components/ui/GoogleLocationPicker";
+import { useJsApiLoader } from "@react-google-maps/api";
+
+import type { Libraries } from "@react-google-maps/api";
 
 // --- Styled UI Components ---
 
@@ -77,7 +80,12 @@ function SubmitButton() {
   );
 }
 
+const GOOGLE_MAPS_LIBRARIES: Libraries = ["places", "marker"];
 export default function CompleteSignupPage() {
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -99,12 +107,13 @@ export default function CompleteSignupPage() {
     }
   }, [status, session?.user?.role, router]);
 
-  if (status === "loading") {
+  if (status === "loading" || !isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-pulse flex flex-col items-center">
           <div className="h-12 w-12 bg-green-200 rounded-full mb-4"></div>
           <div className="h-4 w-32 bg-gray-200 rounded"></div>
+          <div className="mt-4 text-gray-500">Loading map...</div>
         </div>
       </div>
     );
@@ -343,6 +352,7 @@ export default function CompleteSignupPage() {
                   if (pincode) setPincode(pincode);
                 }}
                 placeholder="Search for your address..."
+                apiKey={process.env.GOOGLE_MAPS_API_KEY!}
               />
               <input type="hidden" id="street" name="street" value={address} />
             </div>

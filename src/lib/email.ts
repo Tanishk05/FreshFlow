@@ -395,3 +395,47 @@ export async function verifyEmailConfig(): Promise<boolean> {
     return false;
   }
 }
+
+// Send password reset email
+export async function sendPasswordResetEmail(email: string, token: string) {
+  if (!isEmailConfigured()) {
+    throw new Error("Email is not configured");
+  }
+  const resetUrl = `${
+    process.env.NEXTAUTH_URL || "http://localhost:3000"
+  }/reset-password?token=${token}`;
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: "Reset your FreshFlow password",
+    html: `
+      <h2>Reset your password</h2>
+      <p>Click the link below to reset your password. This link will expire in 30 minutes.</p>
+      <a href="${resetUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:white;border-radius:5px;text-decoration:none;">Reset Password</a>
+      <p>If you did not request this, you can ignore this email.</p>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
+
+// Send account verification email
+export async function sendVerificationEmail(email: string, token: string) {
+  if (!isEmailConfigured()) {
+    throw new Error("Email is not configured");
+  }
+  const verifyUrl = `${
+    process.env.NEXTAUTH_URL || "http://localhost:3000"
+  }/verify-email?token=${token}`;
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: "Verify your FreshFlow account",
+    html: `
+      <h2>Verify your email address</h2>
+      <p>Click the link below to verify your email and activate your account.</p>
+      <a href="${verifyUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:white;border-radius:5px;text-decoration:none;">Verify Email</a>
+      <p>If you did not register, you can ignore this email.</p>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}

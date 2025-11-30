@@ -28,6 +28,10 @@ export interface User {
   role?: UserRole | null; // Your custom field
   address?: UserAddress; // Address with coordinates
   isAdmin?: boolean; // Admin flag
+  password?: string | null; // Hashed password for credentials login
+  // Email verification fields
+  verifyToken?: string | null;
+  verifyTokenExpires?: Date | null;
 
   // These are managed by the NextAuth MongoDBAdapter
   // You generally don't need to touch them, but they exist
