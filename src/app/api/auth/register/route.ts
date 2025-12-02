@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       address: undefined,
       isAdmin: false,
     });
-    
+
     // Send verification email with error handling
     try {
       await sendVerificationEmail(email, verifyToken);
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       console.error("Failed to send verification email:", emailError);
       // Still return success since user is created, they can request resend
     }
-    
+
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
     console.error("Registration error:", error);

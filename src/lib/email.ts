@@ -1,7 +1,13 @@
 import nodemailer from "nodemailer";
+import sgMail from "@sendgrid/mail";
 import type { Alert } from "@/actions/alertActions";
 
-// Email configuration
+// Initialize SendGrid if API key is available
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
+
+// Email configuration for nodemailer (fallback)
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
   port: parseInt(process.env.EMAIL_PORT || "587"),
@@ -15,9 +21,10 @@ const transporter = nodemailer.createTransport({
 // Check if email is configured
 export function isEmailConfigured(): boolean {
   return !!(
-    process.env.EMAIL_USER &&
-    process.env.EMAIL_PASSWORD &&
-    process.env.EMAIL_HOST
+    process.env.SENDGRID_API_KEY ||
+    (process.env.EMAIL_USER &&
+      process.env.EMAIL_PASSWORD &&
+      process.env.EMAIL_HOST)
   );
 }
 
@@ -421,29 +428,51 @@ export async function sendPasswordResetEmail(email: string, token: string) {
 // Send account verification email
 export async function sendVerificationEmail(email: string, token: string) {
   if (!isEmailConfigured()) {
-    console.error("Email not configured - missing EMAIL_USER, EMAIL_PASSWORD, or EMAIL_HOST");
+    console.error(
+      "Email not configured - missing SENDGRID_API_KEY or EMAIL credentials"
+    );
     throw new Error("Email is not configured");
   }
-  
+
   const verifyUrl = `${
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/verify-email?token=${token}`;
-  
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: "Verify your FreshFlow account",
-    html: `
-      <h2>Verify your email address</h2>
-      <p>Click the link below to verify your email and activate your account.</p>
-      <a href="${verifyUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:white;border-radius:5px;text-decoration:none;">Verify Email</a>
-      <p>If you did not register, you can ignore this email.</p>
-    `,
-  };
-  
+
+  const emailHtml = `
+    <h2>Verify your email address</h2>
+    <p>Click the link below to verify your email and activate your account.</p>
+    <a href="${verifyUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:white;border-radius:5px;text-decoration:none;">Verify Email</a>
+    <p>If you did not register, you can ignore this email.</p>
+  `;
+
   try {
+    // Try SendGrid Web API first (more reliable)
+    if (process.env.SENDGRID_API_KEY) {
+      const msg = {
+        to: email,
+        from: process.env.EMAIL_FROM || "tanishkshrivastava6@gmail.com",
+        subject: "Verify your FreshFlow account",
+        html: emailHtml,
+      };
+
+      const response = await sgMail.send(msg);
+      console.log(
+        "Verification email sent via SendGrid Web API:",
+        response[0].statusCode
+      );
+      return response;
+    }
+
+    // Fallback to SMTP
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Verify your FreshFlow account",
+      html: emailHtml,
+    };
+
     const info = await transporter.sendMail(mailOptions);
-    console.log("Verification email sent successfully:", info.messageId);
+    console.log("Verification email sent via SMTP:", info.messageId);
     return info;
   } catch (error) {
     console.error("Failed to send verification email:", error);
