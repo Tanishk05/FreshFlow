@@ -15,10 +15,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   // 3. Add the providers that need the adapter
   providers: [
     ...authConfig.providers, // (This is [Google] from the lite config)
-    Nodemailer({
-      // (This is the adapter-dependent one)
-      server: process.env.EMAIL_SERVER,
-      from: process.env.EMAIL_FROM,
-    }),
+    // Only add Nodemailer if EMAIL_SERVER is configured (runtime only)
+    ...(process.env.EMAIL_SERVER
+      ? [
+          Nodemailer({
+            server: process.env.EMAIL_SERVER,
+            from: process.env.EMAIL_FROM,
+          }),
+        ]
+      : []),
   ],
 });

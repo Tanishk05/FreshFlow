@@ -46,28 +46,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            MONGODB_URI=${{ secrets.MONGODB_URI }}
-            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
-            AUTH_URL=${{ secrets.AUTH_URL }}
-            EMAIL_HOST=${{ secrets.EMAIL_HOST }}
-            EMAIL_PORT=${{ secrets.EMAIL_PORT }}
-            EMAIL_USER=${{ secrets.EMAIL_USER }}
-            EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }}
             NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }}
-            VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
-            VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
             NEXT_PUBLIC_VAPID_PUBLIC_KEY=${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
-            OPENROUTESERVICE_API_KEY=${{ secrets.OPENROUTESERVICE_API_KEY }}
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
-            CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
-            CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
             NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
             NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID }}
-            GOOGLE_MAPS_SERVER_API_KEY=${{ secrets.GOOGLE_MAPS_SERVER_API_KEY }}
-            WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
-            WEBHOOK_ENABLED=${{ secrets.WEBHOOK_ENABLED }}
-            NEXT_PRODUCTION=${{ secrets.NEXT_PRODUCTION }}
 
   deploy:
     needs: build-and-push
