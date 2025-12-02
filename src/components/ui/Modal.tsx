@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sprout } from "lucide-react";
 import GoogleBtn from "../authButtons/GoogleBtn";
-import EmailSignInForm from "../authButtons/EmailBtn";
 import CredentialsSignInForm from "../authButtons/CredentialsBtn";
 import RegisterForm from "../authButtons/RegisterBtn";
 
@@ -117,27 +116,13 @@ export default function Modal({ isOpen, onClose, type }: ModalProps) {
                         <span className="w-full border-t border-gray-300 dark:border-gray-600"></span>
                       </div>
                       <span className="relative z-10 px-2 bg-white dark:bg-gray-800 text-sm text-gray-500">
-                        Or
-                      </span>
-                    </div>
-                    <EmailSignInForm />
-                    {/* --- 2. "Or" Divider --- */}
-                    <div className="relative flex items-center justify-center">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-gray-300 dark:border-gray-600"></span>
-                      </div>
-                      <span className="relative z-10 px-2 bg-white dark:bg-gray-800 text-sm text-gray-500">
-                        Or
+                        Or continue with
                       </span>
                     </div>
                     <GoogleBtn />
                   </>
                 )}
               </div>
-
-              {/* You no longer need the "Don't h</div>ave an account?" toggle,
-    since the magic link handles both login and sign-up.
-  */}
             </div>
           </motion.div>
         </motion.div>
