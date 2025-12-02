@@ -71,6 +71,12 @@ jobs:
               rm get-docker.sh
             fi
 
+            # Start Docker daemon if not running
+            if ! systemctl is-active --quiet docker; then
+              systemctl start docker
+              systemctl enable docker
+            fi
+
             # Login to GitHub Container Registry
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
