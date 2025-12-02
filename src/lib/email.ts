@@ -402,7 +402,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     throw new Error("Email is not configured");
   }
   const resetUrl = `${
-    process.env.NEXTAUTH_URL || "http://localhost:3000"
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/reset-password?token=${token}`;
   const mailOptions = {
     from: process.env.EMAIL_USER,
@@ -424,7 +424,7 @@ export async function sendVerificationEmail(email: string, token: string) {
     throw new Error("Email is not configured");
   }
   const verifyUrl = `${
-    process.env.NEXTAUTH_URL || "http://localhost:3000"
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/verify-email?token=${token}`;
   const mailOptions = {
     from: process.env.EMAIL_USER,
