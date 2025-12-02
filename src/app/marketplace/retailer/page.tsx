@@ -13,7 +13,9 @@ import {
   getMarketplaceProduce,
   MarketplaceProduce,
 } from "@/actions/marketplaceActions";
-import { createOrder } from "@/actions/orderActions";
+import { createOrder, calculateDeliveryFee } from "@/actions/orderActions";
+import { getFreeDeliveryMessage } from "@/lib/pricing";
+import { getMySubscription } from "@/actions/subscriptionActions";
 
 // Emoji mapping for produce categories
 const emojiMap: Record<string, string> = {
@@ -36,8 +38,11 @@ export default function RetailerProcurementPage() {
   const [produce, setProduce] = useState<MarketplaceProduce[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [poItems, setPoItems] = useState<{ id: string; qty: number }[]>([]);
+  const [poItems, setPoItems] = useState<
+    { id: string; qty: number; deliveryFee?: number }[]
+  >([]);
   const [submitting, setSubmitting] = useState(false);
+  const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
 
   // Fetch marketplace produce on component mount
   useEffect(() => {
@@ -46,6 +51,12 @@ export default function RetailerProcurementPage() {
         setLoading(true);
         const data = await getMarketplaceProduce();
         setProduce(data);
+
+        // Fetch subscription tier
+        const subResult = await getMySubscription();
+        if (subResult.success && subResult.data) {
+          setSubscriptionTier(subResult.data.tier);
+        }
       } catch (error) {
         console.error("Error fetching produce:", error);
       } finally {
@@ -61,12 +72,16 @@ export default function RetailerProcurementPage() {
     [produce, query]
   );
 
-  const addToPO = (id: string) => {
+  const addToPO = async (id: string) => {
+    // Calculate delivery fee for this item
+    const feeResult = await calculateDeliveryFee(id);
+    const deliveryFee = feeResult.success ? feeResult.deliveryFee : 0;
+
     setPoItems((prev) => {
       const exists = prev.find((p) => p.id === id);
       if (exists)
         return prev.map((p) => (p.id === id ? { ...p, qty: p.qty + 10 } : p));
-      return [...prev, { id, qty: 10 }];
+      return [...prev, { id, qty: 10, deliveryFee }];
     });
   };
 
@@ -88,8 +103,24 @@ export default function RetailerProcurementPage() {
       const prod = produce.find((x) => x._id === p.id);
       return s + (prod ? prod.pricePerUnit * p.qty : 0);
     }, 0);
-    return { totalQty, totalCost };
-  }, [poItems, produce]);
+    const totalDeliveryFees = poItems.reduce(
+      (s, p) => s + (p.deliveryFee || 0),
+      0
+    );
+    const grandTotal = totalCost + totalDeliveryFees;
+    const freeDeliveryMessage = getFreeDeliveryMessage(
+      totalCost,
+      subscriptionTier as "free" | "business" | "enterprise"
+    );
+
+    return {
+      totalQty,
+      totalCost,
+      totalDeliveryFees,
+      grandTotal,
+      freeDeliveryMessage,
+    };
+  }, [poItems, produce, subscriptionTier]);
 
   const handleSubmitPO = async () => {
     if (poItems.length === 0) return;
@@ -295,6 +326,11 @@ export default function RetailerProcurementPage() {
                               <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                                 ₹{prod.pricePerUnit.toFixed(2)}/{prod.unit}
                               </div>
+                              {p.deliveryFee && (
+                                <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                  +₹{p.deliveryFee.toFixed(0)} delivery
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <button
@@ -325,6 +361,40 @@ export default function RetailerProcurementPage() {
                     </ul>
                   )}
                   <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    {/* Free Delivery Progress */}
+                    {totals.freeDeliveryMessage.eligible && (
+                      <div className="mb-3 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                        <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300 mb-1">
+                          🎉 Free Delivery Unlocked!
+                        </p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          Save ₹{totals.totalDeliveryFees.toFixed(2)} on this
+                          order
+                        </p>
+                      </div>
+                    )}
+                    {!totals.freeDeliveryMessage.eligible &&
+                      totals.freeDeliveryMessage.amountNeeded > 0 && (
+                        <div className="mb-3 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                          <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                            🚚 {totals.freeDeliveryMessage.message}
+                          </p>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  (totals.totalCost /
+                                    totals.freeDeliveryMessage.threshold) *
+                                    100,
+                                  100
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="text-gray-500 dark:text-gray-400">
                         Total quantity
@@ -333,14 +403,64 @@ export default function RetailerProcurementPage() {
                         {totals.totalQty} units
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-sm mb-1">
                       <span className="text-gray-500 dark:text-gray-400">
-                        Estimated cost
+                        Product cost
                       </span>
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      <span className="font-medium text-gray-900 dark:text-white">
                         ₹{totals.totalCost.toFixed(2)}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Delivery fees
+                      </span>
+                      {totals.freeDeliveryMessage.eligible ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs line-through text-gray-400">
+                            ₹{totals.totalDeliveryFees.toFixed(2)}
+                          </span>
+                          <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                            FREE
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          ₹{totals.totalDeliveryFees.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-100 dark:border-gray-700">
+                      <span className="text-gray-700 dark:text-gray-300 font-medium">
+                        Grand Total
+                      </span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
+                        ₹
+                        {(totals.freeDeliveryMessage.eligible
+                          ? totals.totalCost
+                          : totals.grandTotal
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Subscription Upgrade Prompt */}
+                    {subscriptionTier === "free" && totals.totalCost < 2000 && (
+                      <div className="mt-3 p-2 rounded-lg bg-linear-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800">
+                        <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
+                          💎 Upgrade to Business
+                        </p>
+                        <p className="text-xs text-purple-600 dark:text-purple-400">
+                          Get free delivery at ₹1500 + 3% discount
+                        </p>
+                        <Link
+                          href="/profile?tab=subscription"
+                          className="mt-2 block text-center text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
+                        >
+                          View Plans
+                        </Link>
+                      </div>
+                    )}
+
                     <button
                       onClick={handleSubmitPO}
                       disabled={poItems.length === 0 || submitting}

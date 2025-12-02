@@ -11,6 +11,13 @@ import MobileHeader from "@/components/layout/MobileHeader"; // <--- 1. IMPORT
 import MobileNav from "@/components/layout/MobileNav";
 import BackToTop from "@/components/layout/BackToTop";
 
+// SEO Components
+import {
+  OrganizationStructuredData,
+  WebApplicationStructuredData,
+  FAQStructuredData,
+} from "@/components/seo/StructuredData";
+
 // ... (other imports)
 import Preloader from "@/components/ui/Preloader";
 import Modal from "@/components/ui/Modal";
@@ -71,6 +78,34 @@ export default function Home() {
 
   return (
     <>
+      {/* SEO Structured Data */}
+      <OrganizationStructuredData />
+      <WebApplicationStructuredData />
+      <FAQStructuredData
+        items={[
+          {
+            question: "What is FreshFlow?",
+            answer:
+              "FreshFlow is an AI-powered fresh food supply chain management platform that connects farmers, distributors, and retailers with real-time tracking, predictive analytics, and automated logistics.",
+          },
+          {
+            question: "How does FreshFlow reduce food waste?",
+            answer:
+              "FreshFlow uses AI-powered demand forecasting, real-time inventory tracking, and shelf-life monitoring to optimize supply chain operations and minimize food waste throughout the distribution process.",
+          },
+          {
+            question: "Who can use FreshFlow?",
+            answer:
+              "FreshFlow is designed for farmers, distributors, and retailers in the fresh food supply chain. Each role has access to specialized features tailored to their specific needs.",
+          },
+          {
+            question: "Is FreshFlow free to use?",
+            answer:
+              "FreshFlow offers a free tier with basic features. Premium plans are available for businesses that need advanced analytics, higher transaction volumes, and priority support.",
+          },
+        ]}
+      />
+
       <AnimatePresence>
         {loading && <Preloader onComplete={handleLoadingComplete} />}
       </AnimatePresence>

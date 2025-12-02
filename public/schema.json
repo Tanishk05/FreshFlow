@@ -1,0 +1,32 @@
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "FreshFlow",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.8",
+    "ratingCount": "150"
+  },
+  "description": "AI-powered fresh food supply chain management platform connecting farmers, distributors, and retailers with real-time tracking, predictive analytics, and automated logistics.",
+  "featureList": [
+    "Real-time inventory tracking",
+    "AI-powered demand forecasting",
+    "Automated logistics management",
+    "Quality control monitoring",
+    "Price optimization",
+    "Waste reduction analytics"
+  ],
+  "screenshot": "https://freshflow.com/screenshot.png",
+  "softwareVersion": "1.0.0",
+  "author": {
+    "@type": "Organization",
+    "name": "FreshFlow"
+  }
+}

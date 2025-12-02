@@ -6,6 +6,7 @@ import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import { useMediaQuery } from "@/hooks/useMediaQuery"; // Assuming this exists
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // IMPORT SHARED & RETAILER COMPONENTS
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
@@ -89,6 +90,12 @@ export default function RetailerDashboard() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [myOrders, setMyOrders] = useState<RetailerOrder[]>([]);
 
+  // Loading states
+  const [isLoadingInventory, setIsLoadingInventory] = useState(true);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [isLoadingAlerts, setIsLoadingAlerts] = useState(true);
+
   // Sidebar & Responsive State
   const [isShrunk, setIsShrunk] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -104,12 +111,15 @@ export default function RetailerDashboard() {
   useEffect(() => {
     const fetchInventory = async () => {
       try {
+        setIsLoadingInventory(true);
         const result = await getMyStoreInventory();
         if (result.success && result.data) {
           setInventory(result.data as StoreItem[]);
         }
       } catch (error) {
         console.error("Error fetching inventory:", error);
+      } finally {
+        setIsLoadingInventory(false);
       }
     };
 
@@ -120,12 +130,15 @@ export default function RetailerDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        setIsLoadingStats(true);
         const result = await getInventoryStats();
         if (result.success && result.data) {
           setInventoryStats(result.data);
         }
       } catch (error) {
         console.error("Error fetching inventory stats:", error);
+      } finally {
+        setIsLoadingStats(false);
       }
     };
 
@@ -136,10 +149,13 @@ export default function RetailerDashboard() {
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
+        setIsLoadingAlerts(true);
         const alertsData = await getMyAlerts();
         setAlerts(alertsData);
       } catch (error) {
         console.error("Error fetching alerts:", error);
+      } finally {
+        setIsLoadingAlerts(false);
       }
     };
 
@@ -150,12 +166,15 @@ export default function RetailerDashboard() {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
+        setIsLoadingOrders(true);
         const result = await getMyRetailerOrders();
         if (result.success && result.data) {
           setMyOrders(result.data as RetailerOrder[]);
         }
       } catch (error) {
         console.error("Error fetching orders:", error);
+      } finally {
+        setIsLoadingOrders(false);
       }
     };
 
@@ -269,11 +288,26 @@ export default function RetailerDashboard() {
               transition={{ delay: 0.1 }}
               className="mb-8"
             >
-              <RetailerStatsGrid
-                expiringSoonCount={inventoryStats.expiringSoonCount}
-                lowStockCount={inventoryStats.lowStockCount}
-                incomingDeliveriesCount={incomingDeliveries.length}
-              />
+              {isLoadingStats ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-3"
+                    >
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-8 w-32" />
+                      <Skeleton className="h-3 w-40" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <RetailerStatsGrid
+                  expiringSoonCount={inventoryStats.expiringSoonCount}
+                  lowStockCount={inventoryStats.lowStockCount}
+                  incomingDeliveriesCount={incomingDeliveries.length}
+                />
+              )}
             </motion.div>
 
             {/* Priority Section 2: Operations - Incoming Deliveries + Store Inventory */}
@@ -283,11 +317,34 @@ export default function RetailerDashboard() {
               transition={{ delay: 0.2 }}
               className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
             >
-              <IncomingDeliveries deliveries={incomingDeliveries} />
-              <StoreInventory
-                inventory={inventory}
-                onMarkSpoiled={markAsSpoiled}
-              />
+              {isLoadingOrders ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-40" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <IncomingDeliveries deliveries={incomingDeliveries} />
+              )}
+              {isLoadingInventory ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-40" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <StoreInventory
+                  inventory={inventory}
+                  onMarkSpoiled={markAsSpoiled}
+                />
+              )}
             </motion.div>
 
             {/* Priority Section 3: Order Tracking */}
@@ -297,7 +354,18 @@ export default function RetailerDashboard() {
               transition={{ delay: 0.3 }}
               className="mb-8"
             >
-              <RetailerOrderTracking orders={myOrders} />
+              {isLoadingOrders ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-48" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <RetailerOrderTracking orders={myOrders} />
+              )}
             </motion.div>
           </div>
         </motion.main>

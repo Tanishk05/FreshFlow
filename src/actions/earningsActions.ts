@@ -2,7 +2,17 @@
 
 import { auth } from "@/auth";
 import { getOrdersCollection } from "@/models/Order";
+import { getRetailerOrderCollection } from "@/models/RetailerOrder";
 import { ObjectId } from "mongodb";
+
+export type EarningsData = {
+  totalRevenue: number;
+  grossSales: number;
+  platformCommission: number;
+  totalOrders: number;
+  subscriptionTier: string;
+  avgOrderValue?: number;
+};
 
 export interface DeliveryEarnings {
   totalEarnings: number;
@@ -174,5 +184,222 @@ export async function getEarningsByDateRange(
   } catch (error) {
     console.error("Error fetching earnings by date range:", error);
     return { success: false, error: "Failed to fetch earnings data" };
+  }
+}
+
+/**
+ * Get earnings for the current user based on their role
+ */
+export async function getEarnings(
+  period: "week" | "month" | "year" = "month"
+): Promise<{ success: boolean; data?: EarningsData; error?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const role = session.user.role;
+    const userId = new ObjectId(session.user.id);
+
+    // Calculate date range
+    const now = new Date();
+    const startDate = new Date();
+    if (period === "week") {
+      startDate.setDate(now.getDate() - 7);
+    } else if (period === "month") {
+      startDate.setMonth(now.getMonth() - 1);
+    } else {
+      startDate.setFullYear(now.getFullYear() - 1);
+    }
+
+    if (role === "farmer") {
+      return await getFarmerEarnings(userId, startDate);
+    } else if (role === "distributor") {
+      return await getDistributorEarningsNew(userId, startDate);
+    } else if (role === "retailer") {
+      return await getRetailerEarnings(userId, startDate);
+    }
+
+    return { success: false, error: "Invalid user role" };
+  } catch (error) {
+    console.error("Error fetching earnings:", error);
+    return { success: false, error: "Failed to fetch earnings" };
+  }
+}
+
+async function getFarmerEarnings(userId: ObjectId, startDate: Date) {
+  const ordersCollection = await getOrdersCollection();
+
+  const orders = await ordersCollection
+    .find({
+      farmerId: userId,
+      status: "delivered",
+      createdAt: { $gte: startDate },
+    })
+    .toArray();
+
+  const totalRevenue = orders.reduce(
+    (sum, order) => sum + (order.farmerRevenue || 0),
+    0
+  );
+  const grossSales = orders.reduce(
+    (sum, order) => sum + order.quantity * order.pricePerUnit,
+    0
+  );
+  const platformCommission = orders.reduce(
+    (sum, order) => sum + (order.platformCommission || 0),
+    0
+  );
+
+  // Get subscription tier from first order or default to free
+  const subscriptionTier = orders[0]?.retailerSubscriptionTier || "free";
+
+  return {
+    success: true,
+    data: {
+      totalRevenue,
+      grossSales,
+      platformCommission,
+      totalOrders: orders.length,
+      subscriptionTier,
+      avgOrderValue: orders.length > 0 ? grossSales / orders.length : 0,
+    },
+  };
+}
+
+async function getDistributorEarningsNew(userId: ObjectId, startDate: Date) {
+  const ordersCollection = await getOrdersCollection();
+
+  const orders = await ordersCollection
+    .find({
+      distributorId: userId,
+      status: "delivered",
+      createdAt: { $gte: startDate },
+    })
+    .toArray();
+
+  const totalRevenue = orders.reduce(
+    (sum, order) => sum + (order.distributorRevenue || 0),
+    0
+  );
+  const totalDeliveryFees = orders.reduce(
+    (sum, order) => sum + (order.finalDeliveryFee || 0),
+    0
+  );
+
+  return {
+    success: true,
+    data: {
+      totalRevenue,
+      grossSales: totalDeliveryFees,
+      platformCommission: 0, // Distributors don't pay commission
+      totalOrders: orders.length,
+      subscriptionTier: "free",
+      avgOrderValue: orders.length > 0 ? totalDeliveryFees / orders.length : 0,
+    },
+  };
+}
+
+async function getRetailerEarnings(userId: ObjectId, startDate: Date) {
+  const retailerOrdersCollection = await getRetailerOrderCollection();
+
+  const orders = await retailerOrdersCollection
+    .find({
+      retailerId: userId,
+      status: "delivered",
+      createdAt: { $gte: startDate },
+    })
+    .toArray();
+
+  const totalSpent = orders.reduce(
+    (sum: number, order) =>
+      sum + order.totalAmount + (order.finalDeliveryFee || 0),
+    0
+  );
+
+  const totalSavings = orders.reduce((sum: number, order) => {
+    const deliveryDiscount = order.deliveryDiscount || 0;
+    return sum + deliveryDiscount;
+  }, 0);
+
+  // Get subscription tier from metadata if available
+  const subscriptionTier = "free";
+
+  return {
+    success: true,
+    data: {
+      totalRevenue: totalSpent, // For retailers, this represents total spending
+      grossSales: totalSpent + totalSavings, // What they would have paid without discounts
+      platformCommission: totalSavings, // For retailers, this represents savings
+      totalOrders: orders.length,
+      subscriptionTier,
+      avgOrderValue: orders.length > 0 ? totalSpent / orders.length : 0,
+    },
+  };
+}
+
+/**
+ * Get platform-wide earnings statistics (admin only)
+ */
+export async function getPlatformEarnings(
+  period: "week" | "month" | "year" = "month"
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id || !session.user.isAdmin) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const now = new Date();
+    const startDate = new Date();
+    if (period === "week") {
+      startDate.setDate(now.getDate() - 7);
+    } else if (period === "month") {
+      startDate.setMonth(now.getMonth() - 1);
+    } else {
+      startDate.setFullYear(now.getFullYear() - 1);
+    }
+
+    const ordersCollection = await getOrdersCollection();
+
+    const orders = await ordersCollection
+      .find({
+        status: "delivered",
+        createdAt: { $gte: startDate },
+      })
+      .toArray();
+
+    const platformRevenue = orders.reduce(
+      (sum, order) => sum + (order.platformRevenue || 0),
+      0
+    );
+    const totalCommission = orders.reduce(
+      (sum, order) => sum + (order.platformCommission || 0),
+      0
+    );
+    const totalServiceFees = orders.reduce(
+      (sum, order) => sum + (order.serviceFee || 0),
+      0
+    );
+    const totalVolume = orders.reduce(
+      (sum, order) => sum + order.quantity * order.pricePerUnit,
+      0
+    );
+
+    return {
+      success: true,
+      data: {
+        platformRevenue,
+        totalCommission,
+        totalServiceFees,
+        totalOrders: orders.length,
+        totalVolume,
+        avgOrderValue: orders.length > 0 ? totalVolume / orders.length : 0,
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching platform earnings:", error);
+    return { success: false, error: "Failed to fetch platform earnings" };
   }
 }

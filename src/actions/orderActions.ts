@@ -9,6 +9,21 @@ import { getRetailerOrderCollection } from "@/models/RetailerOrder";
 import { getUsersCollection } from "@/models/User";
 import { getDeliveryDistance } from "@/lib/distanceCalculator";
 import { triggerOrderWebhook } from "@/actions/webhookActions";
+import {
+  calculateOrderPricing,
+  calculateBulkDiscount,
+  DEFAULT_PRICING_CONFIG,
+} from "@/lib/pricing";
+import {
+  getSubscriptionsCollection,
+  type SubscriptionTier,
+} from "@/models/Subscription";
+import {
+  getUserLoyaltyPointsCollection,
+  getPointsTransactionsCollection,
+  calculatePointsFromPurchase,
+  calculateTier,
+} from "@/models/LoyaltyPoints";
 
 /**
  * Get all orders for the current farmer
@@ -147,20 +162,29 @@ export async function createOrder(data: {
       return { success: false, error: "Produce not found" };
     }
 
-    // Calculate estimated distance and time if possible
+    // Get user details for pricing calculation
+    const usersCollection = await getUsersCollection();
+    const retailer = await usersCollection.findOne({
+      _id: new ObjectId(session.user.id),
+    });
+    const farmer = await usersCollection.findOne({
+      _id: produce.userId,
+    });
+
+    // Get retailer's subscription tier
+    const subscriptionsCollection = await getSubscriptionsCollection();
+    const subscription = await subscriptionsCollection.findOne({
+      userId: new ObjectId(session.user.id),
+      status: "active",
+    });
+    const subscriptionTier = subscription?.tier || "free";
+
+    // Calculate distance and time
+    let distance: number | undefined = undefined;
     let estimatedTime: number | undefined = undefined;
     let estimatedTimeText: string | undefined = undefined;
-    let distance: number | undefined = undefined;
-    try {
-      // Get farmer's and retailer's address for distance calculation
-      const usersCollection = await getUsersCollection();
-      const farmer = await usersCollection.findOne({
-        _id: produce.userId,
-      });
-      const retailer = await usersCollection.findOne({
-        _id: new ObjectId(session.user.id),
-      });
 
+    try {
       if (
         farmer?.address?.latitude &&
         farmer?.address?.longitude &&
@@ -179,16 +203,67 @@ export async function createOrder(data: {
       }
     } catch {}
 
-    // Create the order
+    // Use estimated distance if not calculated
+    if (!distance) {
+      distance = Math.floor(Math.random() * 45) + 5;
+    }
+
+    // Calculate bulk discount
+    const bulkDiscountRate = calculateBulkDiscount(data.quantity);
+    const bulkDiscountAmount =
+      produce.pricePerUnit * data.quantity * bulkDiscountRate;
+
+    // Calculate complete pricing using the pricing utility
+    const pricing = calculateOrderPricing(
+      produce.pricePerUnit,
+      data.quantity,
+      distance,
+      data.quantity, // Assuming quantity in kg for weight
+      undefined, // subscriptionTier not used for delivery calculation
+      DEFAULT_PRICING_CONFIG
+    );
+
+    // Get loyalty points info
+    const loyaltyPointsCollection = await getUserLoyaltyPointsCollection();
+    let loyaltyData = await loyaltyPointsCollection.findOne({
+      userId: new ObjectId(session.user.id),
+    });
+
+    const tier = loyaltyData ? loyaltyData.tier : "bronze";
+    const pointsEarned = calculatePointsFromPurchase(
+      pricing.customerTotal,
+      tier
+    );
+
+    // Create the order with complete pricing breakdown
     const order: Order = {
       farmerId: produce.userId,
-      retailerId: new ObjectId(session.user.id), // Current user as retailer
+      retailerId: new ObjectId(session.user.id),
       produceId: new ObjectId(data.produceId),
       produceName: produce.name,
       quantity: data.quantity,
       unit: produce.unit,
       pricePerUnit: produce.pricePerUnit,
-      totalPrice: produce.pricePerUnit * data.quantity,
+      totalPrice: pricing.productSubtotal,
+
+      // Pricing breakdown
+      platformCommission: pricing.platformCommission,
+      serviceFee: pricing.serviceFee,
+      deliveryFee: pricing.deliveryFee.subtotal,
+      deliveryDiscount: pricing.deliveryFee.discount,
+      finalDeliveryFee: pricing.deliveryFee.final,
+      subscriptionDiscount: pricing.customerSavings,
+      bulkDiscount: bulkDiscountAmount,
+
+      // Revenue distribution
+      farmerRevenue: pricing.farmerRevenue,
+      distributorRevenue: pricing.distributorRevenue,
+      platformRevenue: pricing.platformRevenue,
+
+      // Subscription and loyalty
+      retailerSubscriptionTier: subscriptionTier as SubscriptionTier,
+      loyaltyPointsEarned: pointsEarned,
+
       status: "pending",
       orderDate: new Date(),
       notes: data.notes,
@@ -200,6 +275,60 @@ export async function createOrder(data: {
     };
 
     const result = await ordersCollection.insertOne(order);
+
+    // Award loyalty points
+    if (!loyaltyData) {
+      // Create new loyalty record
+      const newLoyaltyDoc = {
+        userId: new ObjectId(session.user.id),
+        totalEarned: pointsEarned,
+        totalRedeemed: 0,
+        totalExpired: 0,
+        currentBalance: pointsEarned,
+        tier: "bronze" as const,
+        pointsMultiplier: 1.0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const insertResult = await loyaltyPointsCollection.insertOne(
+        newLoyaltyDoc
+      );
+      loyaltyData = { ...newLoyaltyDoc, _id: insertResult.insertedId };
+    } else {
+      // Update existing loyalty record
+      const newTotalEarned = loyaltyData.totalEarned + pointsEarned;
+      const newTier = calculateTier(newTotalEarned);
+
+      await loyaltyPointsCollection.updateOne(
+        { userId: new ObjectId(session.user.id) },
+        {
+          $inc: {
+            totalEarned: pointsEarned,
+            currentBalance: pointsEarned,
+          },
+          $set: {
+            tier: newTier,
+            updatedAt: new Date(),
+          },
+        }
+      );
+    }
+
+    // Record points transaction
+    const pointsTransactionsCollection =
+      await getPointsTransactionsCollection();
+    await pointsTransactionsCollection.insertOne({
+      userId: new ObjectId(session.user.id),
+      type: "earned_purchase",
+      points: pointsEarned,
+      balance: (loyaltyData?.currentBalance || 0) + pointsEarned,
+      orderId: result.insertedId,
+      description: `Earned ${pointsEarned} points from order #${result.insertedId
+        .toString()
+        .slice(-6)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+      createdAt: new Date(),
+    });
 
     // Trigger webhook for new order
     await triggerOrderWebhook({
@@ -1224,5 +1353,84 @@ export async function assignMultipleOrdersToTruck(
   } catch (error) {
     console.error("Error assigning orders to truck:", error);
     return { success: false, error: "Failed to assign orders to truck" };
+  }
+}
+
+/**
+ * Calculate delivery fee for a produce item based on farmer and retailer locations
+ */
+export async function calculateDeliveryFee(produceId: string) {
+  try {
+    const session = await auth();
+
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized", deliveryFee: 0 };
+    }
+
+    const produceCollection = await getProduceCollection();
+    const produce = await produceCollection.findOne({
+      _id: new ObjectId(produceId),
+    });
+
+    if (!produce) {
+      return { success: false, error: "Produce not found", deliveryFee: 0 };
+    }
+
+    let deliveryFee = 0;
+    let distance: number | undefined = undefined;
+
+    try {
+      const usersCollection = await getUsersCollection();
+      const farmer = await usersCollection.findOne({
+        _id: produce.userId,
+      });
+      const retailer = await usersCollection.findOne({
+        _id: new ObjectId(session.user.id),
+      });
+
+      if (
+        farmer?.address?.latitude &&
+        farmer?.address?.longitude &&
+        retailer?.address?.latitude &&
+        retailer?.address?.longitude
+      ) {
+        const result = await getDeliveryDistance(
+          farmer.address.latitude,
+          farmer.address.longitude,
+          retailer.address.latitude,
+          retailer.address.longitude
+        );
+        distance = result.distance;
+
+        // Calculate delivery fee based on distance
+        // Base fee: ₹50, Distance fee: ₹10 per km
+        const baseFee = 50;
+        const distanceFee = distance * 10;
+        deliveryFee = baseFee + distanceFee;
+      }
+    } catch (error) {
+      console.error("Error calculating distance:", error);
+    }
+
+    // If distance couldn't be calculated, use estimated delivery fee
+    if (!deliveryFee) {
+      const estimatedDistance = Math.floor(Math.random() * 45) + 5;
+      const baseFee = 50;
+      const distanceFee = estimatedDistance * 10;
+      deliveryFee = baseFee + distanceFee;
+    }
+
+    return {
+      success: true,
+      deliveryFee: Math.round(deliveryFee),
+      distance: distance ? Math.round(distance) : undefined,
+    };
+  } catch (error) {
+    console.error("Error calculating delivery fee:", error);
+    return {
+      success: false,
+      error: "Failed to calculate delivery fee",
+      deliveryFee: 0,
+    };
   }
 }

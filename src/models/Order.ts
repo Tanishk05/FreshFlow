@@ -12,6 +12,14 @@ export type OrderStatus =
   | "rejected"
   | "cancelled";
 
+// Subscription tier types
+export type SubscriptionTier =
+  | "free"
+  | "pro"
+  | "premium"
+  | "business"
+  | "enterprise";
+
 // Define the Order interface
 export interface Order {
   _id?: ObjectId;
@@ -23,8 +31,26 @@ export interface Order {
   quantity: number;
   unit: "kg" | "tons" | "bags";
   pricePerUnit: number;
-  totalPrice: number;
-  deliveryFee?: number; // Fee paid to distributor for delivery
+  totalPrice: number; // Product price × quantity
+
+  // Pricing breakdown
+  platformCommission?: number; // Platform fee (percentage of totalPrice)
+  serviceFee?: number; // Fixed service fee per order
+  deliveryFee?: number; // Original delivery fee before discounts
+  deliveryDiscount?: number; // Delivery discount applied
+  finalDeliveryFee?: number; // Final delivery fee after discount
+  subscriptionDiscount?: number; // Discount from subscription tier
+  bulkDiscount?: number; // Discount from bulk ordering
+
+  // Revenue distribution
+  farmerRevenue?: number; // Amount farmer receives
+  distributorRevenue?: number; // Amount distributor receives
+  platformRevenue?: number; // Amount platform earns
+
+  // Subscription and loyalty
+  retailerSubscriptionTier?: SubscriptionTier;
+  loyaltyPointsEarned?: number;
+
   destination?: string; // Destination city/area
   deliveryAddress?: string; // Full delivery address
   distance?: number; // Distance in km

@@ -335,30 +335,57 @@ async function processNewAlerts(
       "@/actions/notificationActions"
     );
     const { sendAlertEmail } = await import("@/lib/email");
+    const { getAlertEmailCollection } = await import("@/models/AlertEmail");
 
     // Create notifications for critical and warning alerts
     const importantAlerts = alerts.filter(
       (alert) => alert.type === "critical" || alert.type === "warning"
     );
 
-    // Send in-app notifications
+    // Check which alerts haven't been sent yet
+    const alertEmailCollection = await getAlertEmailCollection();
+    const newAlerts = [];
+
     for (const alert of importantAlerts) {
-      await createNotification(userId, alert);
+      // Check if this alert email was already sent
+      const existingEmail = await alertEmailCollection.findOne({
+        userId: userId,
+        alertId: alert.id,
+      });
+
+      if (!existingEmail) {
+        newAlerts.push(alert);
+
+        // Create in-app notification
+        await createNotification(userId, alert);
+      }
     }
 
-    // Send email notification if user has email and there are important alerts
+    // Send email notification only for new alerts
     if (
-      importantAlerts.length > 0 &&
+      newAlerts.length > 0 &&
       session.user?.email &&
       session.user?.name &&
       session.user?.role
     ) {
+      const userEmail = session.user.email;
+
       await sendAlertEmail(
-        session.user.email,
+        userEmail,
         session.user.name,
         session.user.role,
-        importantAlerts
+        newAlerts
       );
+
+      // Track that we sent these emails
+      const emailRecords = newAlerts.map((alert) => ({
+        userId: userId,
+        alertId: alert.id,
+        email: userEmail,
+        sentAt: new Date(),
+      }));
+
+      await alertEmailCollection.insertMany(emailRecords);
     }
   } catch (error) {
     console.error("Error processing new alerts:", error);

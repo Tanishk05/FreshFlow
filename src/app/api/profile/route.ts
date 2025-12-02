@@ -9,6 +9,17 @@ const profileUpdateSchema = z.object({
   username: z.string().optional(),
   phone: z.string().optional(),
   image: z.string().optional(), // Can be URL or base64
+  address: z
+    .object({
+      street: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      pincode: z.string().optional(),
+      country: z.string().optional(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+    })
+    .optional(),
 });
 
 export async function GET() {
@@ -36,6 +47,15 @@ export async function GET() {
       image: user.image || "",
       role: user.role || "",
       isAdmin: user.isAdmin || false,
+      address: user.address || {
+        street: "",
+        city: "",
+        state: "",
+        pincode: "",
+        country: "",
+        latitude: 19.076,
+        longitude: 72.8777,
+      },
     });
   } catch (err) {
     console.error("Profile fetch error", err);
@@ -60,7 +80,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const { name, email, username, phone, image } = validation.data;
+    const { name, email, username, phone, image, address } = validation.data;
 
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
@@ -68,6 +88,22 @@ export async function PATCH(request: Request) {
     if (username) updates.username = username;
     if (phone) updates.phone = phone;
     if (image) updates.image = image;
+    if (address) {
+      // Clean up address - only set fields that have values
+      const cleanAddress: Record<string, string | number> = {};
+      if (address.street) cleanAddress.street = address.street;
+      if (address.city) cleanAddress.city = address.city;
+      if (address.state) cleanAddress.state = address.state;
+      if (address.pincode) cleanAddress.pincode = address.pincode;
+      if (address.country) cleanAddress.country = address.country;
+      if (address.latitude !== undefined)
+        cleanAddress.latitude = address.latitude;
+      if (address.longitude !== undefined)
+        cleanAddress.longitude = address.longitude;
+      if (Object.keys(cleanAddress).length > 0) {
+        updates.address = cleanAddress;
+      }
+    }
 
     // Never allow role changes from this endpoint
 

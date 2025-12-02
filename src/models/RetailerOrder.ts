@@ -21,7 +21,14 @@ export interface RetailerOrder {
   distributorId: ObjectId;
   items: RetailerOrderItem[];
   totalAmount: number; // Total produce cost (goes to farmer)
-  deliveryFee: number; // Delivery charge (goes to distributor)
+
+  // Pricing breakdown
+  platformCommission?: number;
+  serviceFee?: number;
+  deliveryFee: number; // Original delivery charge
+  deliveryDiscount?: number; // Discount applied to delivery
+  finalDeliveryFee?: number; // Final delivery fee after discount
+
   totalWeightKg: number; // Total weight of all items in kg
   distance?: number; // Distance in km
   status: RetailerOrderStatus;

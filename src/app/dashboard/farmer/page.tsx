@@ -5,6 +5,7 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import { motion } from "framer-motion";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getMyProduce } from "@/actions/produceActions";
 import { getMyAlerts, Alert } from "@/actions/alertActions";
 import {
@@ -100,6 +101,14 @@ export default function FarmerDashboard() {
   const [produce, setProduce] = useState<Produce[]>([]);
   const [produceLoading, setProduceLoading] = useState(true);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+
+  // Loading states
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [isLoadingShipments, setIsLoadingShipments] = useState(true);
+  const [isLoadingTrackedOrders, setIsLoadingTrackedOrders] = useState(true);
+  const [isLoadingPerformance, setIsLoadingPerformance] = useState(true);
+  const [isLoadingAlerts, setIsLoadingAlerts] = useState(true);
+
   const [performanceMetrics, setPerformanceMetrics] = useState<{
     totalRevenue: number;
     revenueGrowth: number;
@@ -134,10 +143,13 @@ export default function FarmerDashboard() {
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
+        setIsLoadingAlerts(true);
         const alertsData = await getMyAlerts();
         setAlerts(alertsData);
       } catch (error) {
         console.error("Error fetching alerts:", error);
+      } finally {
+        setIsLoadingAlerts(false);
       }
     };
 
@@ -148,12 +160,15 @@ export default function FarmerDashboard() {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
+        setIsLoadingOrders(true);
         const result = await getOrdersByStatus("pending");
         if (result.success && result.data) {
           setOrders(result.data as OrderFromDB[]);
         }
       } catch (error) {
         console.error("Error fetching orders:", error);
+      } finally {
+        setIsLoadingOrders(false);
       }
     };
 
@@ -164,12 +179,15 @@ export default function FarmerDashboard() {
   useEffect(() => {
     const fetchShipments = async () => {
       try {
+        setIsLoadingShipments(true);
         const result = await getMyShipments();
         if (result.success && result.data) {
           setShipments(result.data as ShipmentFromDB[]);
         }
       } catch (error) {
         console.error("Error fetching shipments:", error);
+      } finally {
+        setIsLoadingShipments(false);
       }
     };
 
@@ -180,6 +198,7 @@ export default function FarmerDashboard() {
   useEffect(() => {
     const fetchTrackedOrders = async () => {
       try {
+        setIsLoadingTrackedOrders(true);
         const result = await getMyOrders();
         if (result.success && result.data) {
           const allOrders = result.data as OrderFromDB[];
@@ -196,6 +215,8 @@ export default function FarmerDashboard() {
         }
       } catch (error) {
         console.error("Error fetching tracked orders:", error);
+      } finally {
+        setIsLoadingTrackedOrders(false);
       }
     };
 
@@ -206,12 +227,15 @@ export default function FarmerDashboard() {
   useEffect(() => {
     const fetchPerformanceMetrics = async () => {
       try {
+        setIsLoadingPerformance(true);
         const result = await getFarmerPerformanceMetrics();
         if (result.success && result.data) {
           setPerformanceMetrics(result.data);
         }
       } catch (error) {
         console.error("Error fetching performance metrics:", error);
+      } finally {
+        setIsLoadingPerformance(false);
       }
     };
 
@@ -383,12 +407,34 @@ export default function FarmerDashboard() {
               transition={{ delay: 0.1 }}
               className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
             >
-              <FarmerOrderTracking orders={trackedOrders} />
-              <PendingOrders
-                orders={pendingOrders}
-                onApprove={approveOrder}
-                onCancel={cancelOrder}
-              />
+              {isLoadingTrackedOrders ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-48" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <FarmerOrderTracking orders={trackedOrders} />
+              )}
+              {isLoadingOrders ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-40" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <PendingOrders
+                  orders={pendingOrders}
+                  onApprove={approveOrder}
+                  onCancel={cancelOrder}
+                />
+              )}
             </motion.div>
 
             {/* Priority Section 2: Live Shipments + Active Orders */}
@@ -398,7 +444,18 @@ export default function FarmerDashboard() {
               transition={{ delay: 0.2 }}
               className="grid grid-cols-1 gap-6 mb-8"
             >
-              <ShipmentsCard shipments={shipments} />
+              {isLoadingShipments ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-40" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <ShipmentsCard shipments={shipments} />
+              )}
             </motion.div>
 
             {/* Secondary Section: Inventory + Performance */}
@@ -412,9 +469,18 @@ export default function FarmerDashboard() {
                 <CropInventory produce={produce} loading={produceLoading} />
               </div>
               <div>
-                {performanceMetrics && (
+                {isLoadingPerformance ? (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                    <Skeleton className="h-6 w-32" />
+                    <div className="space-y-3">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  </div>
+                ) : performanceMetrics ? (
                   <PerformanceCard metrics={performanceMetrics} />
-                )}
+                ) : null}
               </div>
             </motion.div>
 

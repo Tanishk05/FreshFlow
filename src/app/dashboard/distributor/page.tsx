@@ -5,6 +5,7 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { motion } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // IMPORT SHARED & DISTRIBUTOR COMPONENTS
 import DashboardHeader from "@/components/dashboard/shared/DashboardHeader";
@@ -91,6 +92,9 @@ export default function DistributorDashboard() {
   const [warehouseCapacity, setWarehouseCapacity] = useState(0);
   const [earnings, setEarnings] = useState<DeliveryEarnings | null>(null);
 
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+
   // Sidebar & Responsive State
   const [isShrunk, setIsShrunk] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -101,6 +105,7 @@ export default function DistributorDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setIsLoading(true);
         const [
           alertsData,
           warehouseData,
@@ -153,6 +158,8 @@ export default function DistributorDashboard() {
         }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -395,23 +402,65 @@ export default function DistributorDashboard() {
               transition={{ delay: 0.1 }}
               className="mb-8"
             >
-              <DistributorStatsGrid
-                pendingOrdersCount={assignedOrders.length}
-                trucksOnRoadCount={trucksOnRoad.length}
-                warehouseCapacity={warehouseCapacity}
-              />
+              {isLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-3"
+                    >
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-8 w-32" />
+                      <Skeleton className="h-3 w-40" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <DistributorStatsGrid
+                  pendingOrdersCount={assignedOrders.length}
+                  trucksOnRoadCount={trucksOnRoad.length}
+                  warehouseCapacity={warehouseCapacity}
+                />
+              )}
             </motion.div>
 
             {/* Earnings Overview */}
-            {earnings && (
+            {isLoading ? (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
                 className="mb-8"
               >
-                <EarningsOverview earnings={earnings} />
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-40" />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                  </div>
+                </div>
               </motion.div>
+            ) : (
+              earnings && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                  className="mb-8"
+                >
+                  <EarningsOverview earnings={earnings} />
+                </motion.div>
+              )
             )}
 
             {/* Priority Section: Fleet Management + Warehouse Inventory */}
@@ -421,8 +470,31 @@ export default function DistributorDashboard() {
               transition={{ delay: 0.2 }}
               className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
             >
-              <FleetManagement fleet={fleet} />
-              <WarehouseInventoryComponent stock={warehouseStock} />
+              {isLoading ? (
+                <>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                    <Skeleton className="h-6 w-32" />
+                    <div className="space-y-3">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                    <Skeleton className="h-6 w-40" />
+                    <div className="space-y-3">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <FleetManagement fleet={fleet} />
+                  <WarehouseInventoryComponent stock={warehouseStock} />
+                </>
+              )}
             </motion.div>
 
             {/* Shipment Tracking + Recent Deliveries */}
@@ -432,13 +504,36 @@ export default function DistributorDashboard() {
               transition={{ delay: 0.3 }}
               className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
             >
-              <ShipmentTrackingNew
-                orders={[...pickedUpOrders, ...inTransitOrders]}
-                onMarkDelivered={markAsDelivered}
-                onStartDelivery={startDelivery}
-              />
-              {earnings && earnings.recentDeliveries.length > 0 && (
-                <RecentDeliveries deliveries={earnings.recentDeliveries} />
+              {isLoading ? (
+                <>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                    <Skeleton className="h-6 w-40" />
+                    <div className="space-y-3">
+                      <Skeleton className="h-20 w-full" />
+                      <Skeleton className="h-20 w-full" />
+                      <Skeleton className="h-20 w-full" />
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                    <Skeleton className="h-6 w-40" />
+                    <div className="space-y-3">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ShipmentTrackingNew
+                    orders={[...pickedUpOrders, ...inTransitOrders]}
+                    onMarkDelivered={markAsDelivered}
+                    onStartDelivery={startDelivery}
+                  />
+                  {earnings && earnings.recentDeliveries.length > 0 && (
+                    <RecentDeliveries deliveries={earnings.recentDeliveries} />
+                  )}
+                </>
               )}
             </motion.div>
 
@@ -449,7 +544,18 @@ export default function DistributorDashboard() {
               transition={{ delay: 0.35 }}
               className="mb-8"
             >
-              <DeliveryHistoryNew orders={deliveredOrders} />
+              {isLoading ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-40" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <DeliveryHistoryNew orders={deliveredOrders} />
+              )}
             </motion.div>
 
             {/* Truck Load Management */}
@@ -459,11 +565,21 @@ export default function DistributorDashboard() {
               transition={{ delay: 0.4 }}
               className="mb-8"
             >
-              <TruckLoadManagementNew
-                trucks={fleet.filter((t) => t.status === "available")}
-                assignedOrders={assignedOrders}
-                onAssignOrders={handleAssignMultipleOrders}
-              />
+              {isLoading ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow space-y-4">
+                  <Skeleton className="h-6 w-48" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <TruckLoadManagementNew
+                  trucks={fleet.filter((t) => t.status === "available")}
+                  assignedOrders={assignedOrders}
+                  onAssignOrders={handleAssignMultipleOrders}
+                />
+              )}
             </motion.div>
           </div>
         </motion.main>
