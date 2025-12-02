@@ -35,6 +35,7 @@ export default function Header({
       >
         <div className="text-2xl font-bold text-green-700 dark:text-green-400">
           FreshFlow<span className="text-green-400 dark:text-green-600">.</span>
+          
         </div>
 
         <div className="flex items-center space-x-6">
