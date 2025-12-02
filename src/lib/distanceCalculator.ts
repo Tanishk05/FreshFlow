@@ -31,9 +31,10 @@ export async function getDeliveryDistance(
     throw new Error("Invalid coordinates");
   }
 
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  // Use server-side API key (not exposed to client)
+  const apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY;
   if (!apiKey) {
-    throw new Error("Google Maps API key is missing");
+    throw new Error("Google Maps server API key is missing");
   }
 
   const response = await fetch(

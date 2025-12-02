@@ -352,7 +352,7 @@ export default function CompleteSignupPage() {
                   if (pincode) setPincode(pincode);
                 }}
                 placeholder="Search for your address..."
-                apiKey={process.env.GOOGLE_MAPS_API_KEY!}
+                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
               />
               <input type="hidden" id="street" name="street" value={address} />
             </div>

@@ -152,26 +152,17 @@ export async function createOrder(data: {
     let estimatedTimeText: string | undefined = undefined;
     let distance: number | undefined = undefined;
     try {
-      // Get farmer's and retailer's address for distance calculation
-      const usersCollection = await getUsersCollection();
-      const farmer = await usersCollection.findOne({
-        _id: produce.userId,
-      });
-      const retailer = await usersCollection.findOne({
-        _id: new ObjectId(session.user.id),
-      });
-
       if (
-        farmer?.address?.latitude &&
-        farmer?.address?.longitude &&
-        retailer?.address?.latitude &&
-        retailer?.address?.longitude
+        produce?.location?.latitude &&
+        produce?.location?.longitude &&
+        session.user?.address?.latitude &&
+        session.user?.address?.longitude
       ) {
         const result = await getDeliveryDistance(
-          farmer.address.latitude,
-          farmer.address.longitude,
-          retailer.address.latitude,
-          retailer.address.longitude
+          produce.location.latitude,
+          produce.location.longitude,
+          session.user.address.latitude,
+          session.user.address.longitude
         );
         distance = result.distance;
         estimatedTime = result.duration;

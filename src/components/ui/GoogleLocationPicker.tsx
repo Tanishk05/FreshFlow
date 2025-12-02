@@ -34,7 +34,7 @@ export default function GoogleLocationPicker({
   onChange,
 }: GoogleLocationPickerProps) {
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY!,
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
@@ -135,7 +135,7 @@ export default function GoogleLocationPicker({
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: false,
-          mapId: process.env.GOOGLE_MAPS_ID, // Use your real mapId here
+          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
         }}
       />
     </div>
