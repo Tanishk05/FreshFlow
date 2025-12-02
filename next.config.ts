@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: false, // Disable in dev to reduce duplicate server action calls
 
+  // Enable standalone output for Docker
+  output: "standalone",
+
   // Image optimization
   images: {
     remotePatterns: [

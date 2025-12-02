@@ -34,7 +34,7 @@ export default function Header({
         whileHover={{ scale: 1.01 }}
       >
         <div className="text-2xl font-bold text-green-700 dark:text-green-400">
-          Agridata<span className="text-green-400 dark:text-green-600">.</span>
+          FreshFlow<span className="text-green-400 dark:text-green-600">.</span>
         </div>
 
         <div className="flex items-center space-x-6">
