@@ -67,6 +67,7 @@ jobs:
             GOOGLE_MAPS_SERVER_API_KEY=${{ secrets.GOOGLE_MAPS_SERVER_API_KEY }}
             WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
             WEBHOOK_ENABLED=${{ secrets.WEBHOOK_ENABLED }}
+            NEXT_PRODUCTION=${{ secrets.NEXT_PRODUCTION }}
 
   deploy:
     needs: build-and-push
