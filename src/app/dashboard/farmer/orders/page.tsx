@@ -36,6 +36,8 @@ type Order = {
     | "rejected"
     | "cancelled";
   orderDate: Date;
+  estimatedTime?: number;
+  estimatedTimeText?: string;
   retailerName?: string;
   deliveryDate?: Date;
   deliveryAddress?: string;
@@ -356,6 +358,16 @@ export default function FarmerOrdersPage() {
                                 {new Date(order.orderDate).toLocaleDateString()}
                               </p>
                             </div>
+                            {order.estimatedTimeText && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Est. Delivery Time
+                                </p>
+                                <p className="font-semibold text-blue-600 dark:text-blue-400">
+                                  {order.estimatedTimeText}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           {order.deliveryAddress && (

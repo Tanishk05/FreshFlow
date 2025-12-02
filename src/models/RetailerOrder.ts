@@ -33,6 +33,8 @@ export interface RetailerOrder {
   deliveryDate?: Date; // Actual delivery date when status becomes 'delivered'
   createdAt: Date;
   updatedAt: Date;
+  estimatedTime?: number; // Estimated time in seconds
+  estimatedTimeText?: string; // Human readable estimated time
 }
 
 // Serialized version for client components (ObjectIds converted to strings)
@@ -59,6 +61,8 @@ export interface RetailerOrderSerialized {
   deliveryDate?: Date; // Actual delivery date when status becomes 'delivered'
   createdAt: Date;
   updatedAt: Date;
+  estimatedTime?: number; // Estimated time in seconds
+  estimatedTimeText?: string; // Human readable estimated time
   retailerName?: string;
 }
 

@@ -28,6 +28,8 @@ export interface Order {
   destination?: string; // Destination city/area
   deliveryAddress?: string; // Full delivery address
   distance?: number; // Distance in km
+  estimatedTime?: number; // Estimated time in seconds
+  estimatedTimeText?: string; // Human readable estimated time
   status: OrderStatus;
   orderDate: Date;
   deliveryDate?: Date;

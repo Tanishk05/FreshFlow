@@ -26,6 +26,8 @@ type RetailOrder = {
   totalPrice: number;
   status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
   orderDate: Date;
+  estimatedTime?: number;
+  estimatedTimeText?: string;
   farmerName?: string;
   deliveryDate?: Date;
   deliveryAddress?: string;
@@ -313,6 +315,16 @@ export default function RetailerOrdersPage() {
                                 {new Date(order.orderDate).toLocaleDateString()}
                               </p>
                             </div>
+                            {order.estimatedTimeText && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Est. Delivery Time
+                                </p>
+                                <p className="font-semibold text-blue-600 dark:text-blue-400">
+                                  {order.estimatedTimeText}
+                                </p>
+                              </div>
+                            )}
                           </div>
                           {order.deliveryAddress && (
                             <div className="mt-3">

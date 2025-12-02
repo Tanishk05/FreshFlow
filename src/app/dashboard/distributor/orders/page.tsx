@@ -280,6 +280,16 @@ export default function DistributorOrdersPage() {
                                 {order.assignedTruckId || "Unassigned"}
                               </p>
                             </div>
+                            {order.estimatedTimeText && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Est. Delivery Time
+                                </p>
+                                <p className="font-semibold text-blue-600 dark:text-blue-400">
+                                  {order.estimatedTimeText}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           <div className="mt-4">

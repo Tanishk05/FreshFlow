@@ -147,6 +147,29 @@ export async function createOrder(data: {
       return { success: false, error: "Produce not found" };
     }
 
+    // Calculate estimated distance and time if possible
+    let estimatedTime: number | undefined = undefined;
+    let estimatedTimeText: string | undefined = undefined;
+    let distance: number | undefined = undefined;
+    try {
+      if (
+        produce?.location?.latitude &&
+        produce?.location?.longitude &&
+        session.user?.address?.latitude &&
+        session.user?.address?.longitude
+      ) {
+        const result = await getDeliveryDistance(
+          produce.location.latitude,
+          produce.location.longitude,
+          session.user.address.latitude,
+          session.user.address.longitude
+        );
+        distance = result.distance;
+        estimatedTime = result.duration;
+        estimatedTimeText = result.durationText;
+      }
+    } catch {}
+
     // Create the order
     const order: Order = {
       farmerId: produce.userId,
@@ -162,6 +185,9 @@ export async function createOrder(data: {
       notes: data.notes,
       createdAt: new Date(),
       updatedAt: new Date(),
+      distance,
+      estimatedTime,
+      estimatedTimeText,
     };
 
     const result = await ordersCollection.insertOne(order);
@@ -279,10 +305,15 @@ export async function approveOrder(orderId: string) {
       });
 
       // Calculate actual distance if coordinates are available
-      let distanceResult: {
-        distance: number;
-        method: "driving" | "straight-line" | "estimated";
-      };
+
+      let distanceResult:
+        | {
+            distance: number;
+            duration: number;
+            durationText: string;
+            method: "driving";
+          }
+        | undefined = undefined;
 
       if (
         farmer?.address?.latitude &&
@@ -291,21 +322,20 @@ export async function approveOrder(orderId: string) {
         retailer?.address?.longitude
       ) {
         // Calculate real-world driving distance using mapping API
-        distanceResult = await getDeliveryDistance(
-          farmer.address.latitude,
-          farmer.address.longitude,
-          retailer.address.latitude,
-          retailer.address.longitude
-        );
-      } else {
-        // Fallback to random estimate if no coordinates
-        distanceResult = {
-          distance: Math.floor(Math.random() * 45) + 5,
-          method: "estimated",
-        };
+        try {
+          distanceResult = await getDeliveryDistance(
+            farmer.address.latitude,
+            farmer.address.longitude,
+            retailer.address.latitude,
+            retailer.address.longitude
+          );
+        } catch {}
       }
 
-      const estimatedDistance = distanceResult.distance;
+      const estimatedDistance =
+        distanceResult?.distance ?? Math.floor(Math.random() * 45) + 5;
+      const estimatedTime = distanceResult?.duration;
+      const estimatedTimeText = distanceResult?.durationText;
 
       // Calculate delivery fee based on distance
       // Base fee: ₹50, Distance fee: ₹10 per km
@@ -335,6 +365,8 @@ export async function approveOrder(orderId: string) {
         deliveryFee: deliveryFee, // Goes to distributor
         totalWeightKg: order.quantity, // Assuming quantity is in kg
         distance: estimatedDistance,
+        estimatedTime,
+        estimatedTimeText,
         status: "pending" as const,
         destination: retailer?.name || "Retailer Store",
         deliveryAddress: deliveryAddress,
