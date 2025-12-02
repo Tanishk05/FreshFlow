@@ -24,6 +24,12 @@ ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 ENV NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=$NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID
 
+# Set dummy values for build-time only (will be overridden at runtime)
+ENV MONGODB_URI="mongodb://dummy:27017/build"
+ENV AUTH_SECRET="dummy-secret-for-build-only"
+ENV EMAIL_SERVER="smtp://dummy@localhost:587"
+ENV EMAIL_FROM="build@example.com"
+
 # Build the application
 RUN npm run build
 

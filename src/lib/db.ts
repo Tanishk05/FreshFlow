@@ -1,11 +1,12 @@
 // This approach is taken from https://github.com/vercel/next.js/tree/canary/examples/with-mongodb
 import { MongoClient, ServerApiVersion } from "mongodb";
 
-if (!process.env.MONGODB_URI) {
-  throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
-}
+// Allow dummy value at build time, real value at runtime
+const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/dummy";
 
-const uri = process.env.MONGODB_URI;
+if (!process.env.MONGODB_URI && process.env.NODE_ENV !== "production") {
+  console.warn("Warning: MONGODB_URI not set, using dummy connection string");
+}
 const options = {
   serverApi: {
     version: ServerApiVersion.v1,
