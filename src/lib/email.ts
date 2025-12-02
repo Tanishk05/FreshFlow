@@ -421,11 +421,14 @@ export async function sendPasswordResetEmail(email: string, token: string) {
 // Send account verification email
 export async function sendVerificationEmail(email: string, token: string) {
   if (!isEmailConfigured()) {
+    console.error("Email not configured - missing EMAIL_USER, EMAIL_PASSWORD, or EMAIL_HOST");
     throw new Error("Email is not configured");
   }
+  
   const verifyUrl = `${
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/verify-email?token=${token}`;
+  
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
@@ -437,5 +440,13 @@ export async function sendVerificationEmail(email: string, token: string) {
       <p>If you did not register, you can ignore this email.</p>
     `,
   };
-  await transporter.sendMail(mailOptions);
+  
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Verification email sent successfully:", info.messageId);
+    return info;
+  } catch (error) {
+    console.error("Failed to send verification email:", error);
+    throw error;
+  }
 }

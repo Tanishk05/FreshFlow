@@ -41,9 +41,19 @@ export async function POST(req: NextRequest) {
       address: undefined,
       isAdmin: false,
     });
-    await sendVerificationEmail(email, verifyToken);
+    
+    // Send verification email with error handling
+    try {
+      await sendVerificationEmail(email, verifyToken);
+      console.log(`Verification email sent to ${email}`);
+    } catch (emailError) {
+      console.error("Failed to send verification email:", emailError);
+      // Still return success since user is created, they can request resend
+    }
+    
     return NextResponse.json({ ok: true }, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.error("Registration error:", error);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

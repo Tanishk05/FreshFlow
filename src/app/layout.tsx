@@ -108,9 +108,7 @@ export default function RootLayout({
       <head></head>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <NextAuthProvider>
-            {children}
-          </NextAuthProvider>
+          <NextAuthProvider>{children}</NextAuthProvider>
         </ThemeProvider>
       </body>
     </html>
