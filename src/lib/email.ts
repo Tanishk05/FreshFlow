@@ -453,6 +453,15 @@ export async function sendVerificationEmail(email: string, token: string) {
         from: process.env.EMAIL_FROM || "tanishkshrivastava6@gmail.com",
         subject: "Verify your FreshFlow account",
         html: emailHtml,
+        trackingSettings: {
+          clickTracking: {
+            enable: false,
+            enableText: false,
+          },
+          openTracking: {
+            enable: false,
+          },
+        },
       };
 
       const response = await sgMail.send(msg);
