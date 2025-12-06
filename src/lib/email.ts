@@ -2,12 +2,14 @@ import nodemailer from "nodemailer";
 import sgMail from "@sendgrid/mail";
 import type { Alert } from "@/actions/alertActions";
 
+const isProduction: boolean = process.env.NEXT_PRODUCTION === "true";
+
 // Initialize SendGrid if API key is available
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-// Email configuration for nodemailer (fallback)
+// Email configuration for nodemailer (Gmail SMTP)
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
   port: parseInt(process.env.EMAIL_PORT || "587"),
@@ -20,12 +22,15 @@ const transporter = nodemailer.createTransport({
 
 // Check if email is configured
 export function isEmailConfigured(): boolean {
-  return !!(
-    process.env.SENDGRID_API_KEY ||
-    (process.env.EMAIL_USER &&
+  if (isProduction) {
+    return !!process.env.SENDGRID_API_KEY;
+  } else {
+    return !!(
+      process.env.EMAIL_USER &&
       process.env.EMAIL_PASSWORD &&
-      process.env.EMAIL_HOST)
-  );
+      process.env.EMAIL_HOST
+    );
+  }
 }
 
 // Email template for alerts
@@ -293,14 +298,36 @@ export async function sendEmail(options: {
       return;
     }
 
-    await transporter.sendMail({
-      from: `"FreshFlow" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-    });
-
-    console.log(`[Email] Sent to ${options.to}: ${options.subject}`);
+    if (isProduction && process.env.SENDGRID_API_KEY) {
+      // SendGrid in production
+      const msg = {
+        to: options.to,
+        from: process.env.EMAIL_FROM || "tanishkshrivastava6@gmail.com",
+        subject: options.subject,
+        html: options.html,
+        trackingSettings: {
+          clickTracking: { enable: false, enableText: false },
+          openTracking: { enable: false },
+        },
+      };
+      await sgMail.send(msg);
+      console.log(
+        `[Email] Sent to ${options.to} via SendGrid: ${options.subject}`
+      );
+    } else {
+      // Gmail SMTP in development
+      await transporter.sendMail({
+        from: `"FreshFlow" <${
+          process.env.EMAIL_FROM || process.env.EMAIL_USER
+        }>`,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+      });
+      console.log(
+        `[Email] Sent to ${options.to} via Gmail SMTP: ${options.subject}`
+      );
+    }
   } catch (error) {
     console.error("[Email] Error sending email:", error);
     // Don't throw - email failures shouldn't break the flow
@@ -316,7 +343,7 @@ export async function sendAlertEmail(
 ): Promise<boolean> {
   if (!isEmailConfigured()) {
     console.warn(
-      "⚠️ Email service not configured. Add EMAIL_USER, EMAIL_PASSWORD, and EMAIL_HOST to .env.local"
+      "⚠️ Email service not configured. Add EMAIL_USER, EMAIL_PASSWORD, and EMAIL_HOST to .env.local or SENDGRID_API_KEY to .env.production"
     );
     return false;
   }
@@ -332,18 +359,40 @@ export async function sendAlertEmail(
   }
 
   try {
-    const info = await transporter.sendMail({
-      from: `"FreshFlow Alerts" <${process.env.EMAIL_USER}>`,
-      to: userEmail,
-      subject: `🔔 ${alerts.length} New Alert${
-        alerts.length !== 1 ? "s" : ""
-      } - FreshFlow`,
-      text: getAlertEmailText(userName, userRole, alerts),
-      html: getAlertEmailHtml(userName, userRole, alerts),
-    });
+    const subject = `🔔 ${alerts.length} New Alert${
+      alerts.length !== 1 ? "s" : ""
+    } - FreshFlow`;
+    const html = getAlertEmailHtml(userName, userRole, alerts);
+    const text = getAlertEmailText(userName, userRole, alerts);
 
-    console.log(`✅ Alert email sent to ${userEmail}: ${info.messageId}`);
-    return true;
+    if (isProduction && process.env.SENDGRID_API_KEY) {
+      const msg = {
+        to: userEmail,
+        from: process.env.EMAIL_FROM || "tanishkshrivastava6@gmail.com",
+        subject,
+        html,
+        text,
+        trackingSettings: {
+          clickTracking: { enable: false, enableText: false },
+          openTracking: { enable: false },
+        },
+      };
+      await sgMail.send(msg);
+      console.log(`✅ Alert email sent to ${userEmail} via SendGrid`);
+      return true;
+    } else {
+      const info = await transporter.sendMail({
+        from: `"FreshFlow Alerts" <${process.env.EMAIL_USER}>`,
+        to: userEmail,
+        subject,
+        text,
+        html,
+      });
+      console.log(
+        `✅ Alert email sent to ${userEmail} via Gmail SMTP: ${info.messageId}`
+      );
+      return true;
+    }
   } catch (error) {
     console.error("❌ Error sending alert email:", error);
     return false;
@@ -411,18 +460,36 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   const resetUrl = `${
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/reset-password?token=${token}`;
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: "Reset your FreshFlow password",
-    html: `
-      <h2>Reset your password</h2>
-      <p>Click the link below to reset your password. This link will expire in 30 minutes.</p>
-      <a href="${resetUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:white;border-radius:5px;text-decoration:none;">Reset Password</a>
-      <p>If you did not request this, you can ignore this email.</p>
-    `,
-  };
-  await transporter.sendMail(mailOptions);
+  const subject = "Reset your FreshFlow password";
+  const html = `
+    <h2>Reset your password</h2>
+    <p>Click the link below to reset your password. This link will expire in 30 minutes.</p>
+    <a href="${resetUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:white;border-radius:5px;text-decoration:none;">Reset Password</a>
+    <p>If you did not request this, you can ignore this email.</p>
+  `;
+
+  if (isProduction && process.env.SENDGRID_API_KEY) {
+    const msg = {
+      to: email,
+      from: process.env.EMAIL_FROM || "tanishkshrivastava6@gmail.com",
+      subject,
+      html,
+      trackingSettings: {
+        clickTracking: { enable: false, enableText: false },
+        openTracking: { enable: false },
+      },
+    };
+    await sgMail.send(msg);
+    console.log(`Password reset email sent to ${email} via SendGrid`);
+  } else {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject,
+      html,
+    });
+    console.log(`Password reset email sent to ${email} via Gmail SMTP`);
+  }
 }
 
 // Send account verification email
@@ -437,8 +504,8 @@ export async function sendVerificationEmail(email: string, token: string) {
   const verifyUrl = `${
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/verify-email?token=${token}`;
-
-  const emailHtml = `
+  const subject = "Verify your FreshFlow account";
+  const html = `
     <h2>Verify your email address</h2>
     <p>Click the link below to verify your email and activate your account.</p>
     <a href="${verifyUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:white;border-radius:5px;text-decoration:none;">Verify Email</a>
@@ -446,43 +513,33 @@ export async function sendVerificationEmail(email: string, token: string) {
   `;
 
   try {
-    // Try SendGrid Web API first (more reliable)
-    if (process.env.SENDGRID_API_KEY) {
+    if (isProduction && process.env.SENDGRID_API_KEY) {
       const msg = {
         to: email,
         from: process.env.EMAIL_FROM || "tanishkshrivastava6@gmail.com",
-        subject: "Verify your FreshFlow account",
-        html: emailHtml,
+        subject,
+        html,
         trackingSettings: {
-          clickTracking: {
-            enable: false,
-            enableText: false,
-          },
-          openTracking: {
-            enable: false,
-          },
+          clickTracking: { enable: false, enableText: false },
+          openTracking: { enable: false },
         },
       };
-
       const response = await sgMail.send(msg);
       console.log(
         "Verification email sent via SendGrid Web API:",
         response[0].statusCode
       );
       return response;
+    } else {
+      const info = await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject,
+        html,
+      });
+      console.log("Verification email sent via Gmail SMTP:", info.messageId);
+      return info;
     }
-
-    // Fallback to SMTP
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Verify your FreshFlow account",
-      html: emailHtml,
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Verification email sent via SMTP:", info.messageId);
-    return info;
   } catch (error) {
     console.error("Failed to send verification email:", error);
     throw error;

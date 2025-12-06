@@ -6,6 +6,7 @@ import { X, Sprout } from "lucide-react";
 import GoogleBtn from "../authButtons/GoogleBtn";
 import CredentialsSignInForm from "../authButtons/CredentialsBtn";
 import RegisterForm from "../authButtons/RegisterBtn";
+import EmailSignInForm from "../authButtons/EmailBtn";
 
 type ModalProps = {
   isOpen: boolean;
@@ -72,8 +73,6 @@ export default function Modal({ isOpen, onClose, type }: ModalProps) {
                 {showSignup ? "Create your account" : "Sign in to your account"}
               </h2>
 
-              {/* --- 1. Your Google Button --- */}
-              {/* I removed the 'mt-4' from GoogleBtn and added spacing here */}
               <div className="space-y-4">
                 {showSignup ? (
                   <RegisterForm onSwitchToLogin={() => setShowSignup(false)} />
@@ -81,6 +80,34 @@ export default function Modal({ isOpen, onClose, type }: ModalProps) {
                   <>
                     {/* --- 1. Credentials (Password) Form --- */}
                     <CredentialsSignInForm />
+                    {/* --- 2. Email (Magic Link) Form --- */}
+                    {/* Email provider for magic link login */}
+                    {/** Divider for visual separation */}
+                    <div className="relative flex items-center justify-center my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-gray-300 dark:border-gray-600"></span>
+                      </div>
+                      <span className="relative z-10 px-2 bg-white dark:bg-gray-800 text-sm text-gray-500">
+                        Or continue with Email
+                      </span>
+                    </div>
+                    {/* Email sign-in form (magic link) */}
+                    {/* Import EmailSignInForm at the top if not already */}
+                    {/* ...existing code... */}
+                    {/* --- Email Provider --- */}
+                    {/* Import at top: import EmailSignInForm from "../authButtons/EmailBtn"; */}
+                    <EmailSignInForm />
+                    {/* --- Divider for Google --- */}
+                    <div className="relative flex items-center justify-center my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-gray-300 dark:border-gray-600"></span>
+                      </div>
+                      <span className="relative z-10 px-2 bg-white dark:bg-gray-800 text-sm text-gray-500">
+                        Or continue with Google
+                      </span>
+                    </div>
+                    <GoogleBtn />
+                    {/* ...existing code... */}
                     <div className="text-center mb-4">
                       {showSignup ? (
                         <>
@@ -110,16 +137,6 @@ export default function Modal({ isOpen, onClose, type }: ModalProps) {
                         </>
                       )}
                     </div>
-                    {/* --- 2. "Or" Divider --- */}
-                    <div className="relative flex items-center justify-center">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-gray-300 dark:border-gray-600"></span>
-                      </div>
-                      <span className="relative z-10 px-2 bg-white dark:bg-gray-800 text-sm text-gray-500">
-                        Or continue with
-                      </span>
-                    </div>
-                    <GoogleBtn />
                   </>
                 )}
               </div>

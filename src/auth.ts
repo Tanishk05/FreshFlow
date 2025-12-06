@@ -2,15 +2,24 @@ import NextAuth from "next-auth";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import client from "@/lib/db";
 import authConfig from "./auth.config"; // Your "lite" config
+import Sendgrid from "next-auth/providers/sendgrid";
+import Nodemailer from "next-auth/providers/nodemailer";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  ...authConfig, // 1. Spread the lite config (callbacks, session strategy, Google, Credentials)
+  ...authConfig,
 
-  // 2. Add the adapter
   adapter: MongoDBAdapter(client, {
     databaseName: process.env.MONGODB_DB,
   }),
 
-  // 3. Providers are already defined in authConfig (Google, Credentials)
-  providers: authConfig.providers,
+  // Add email providers here so they use the adapter
+  providers: [
+    ...authConfig.providers,
+    process.env.NEXT_PRODUCTION === "true" && process.env.SENDGRID_API_KEY
+      ? Sendgrid
+      : Nodemailer({
+          server: process.env.EMAIL_SERVER,
+          from: process.env.EMAIL_FROM,
+        }),
+  ],
 });
