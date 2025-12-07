@@ -90,7 +90,7 @@ export default function EmailSignInForm() {
       >
         <Mail className="w-4 h-4" />
         {status === "loading" ? "Sending..." : "Continue with Email"}
-      </motion.button>
+      </motion.button> 
     </form>
   );
 }
