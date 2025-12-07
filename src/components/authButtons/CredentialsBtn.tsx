@@ -4,8 +4,10 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Lock, Eye, EyeOff } from "lucide-react";
+import ForgotPasswordForm from "./ForgotPasswordBtn";
 
 export default function CredentialsBtn() {
+  const [showForgot, setShowForgot] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -59,6 +61,23 @@ export default function CredentialsBtn() {
       setError("Invalid credentials");
     }
   };
+
+  if (showForgot) {
+    return (
+      <div>
+        <ForgotPasswordForm onSent={() => setShowForgot(false)} />
+        <div className="text-center mt-4">
+          <button
+            type="button"
+            className="text-sm text-green-700 dark:text-green-400 hover:underline focus:outline-none"
+            onClick={() => setShowForgot(false)}
+          >
+            Back to login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -115,7 +134,7 @@ export default function CredentialsBtn() {
         <button
           type="button"
           className="text-sm text-green-700 dark:text-green-400 hover:underline focus:outline-none"
-          onClick={() => alert("Password reset flow coming soon!")}
+          onClick={() => setShowForgot(true)}
         >
           Forgot password?
         </button>

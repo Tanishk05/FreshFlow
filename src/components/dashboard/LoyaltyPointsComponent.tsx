@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+
+type Props = {
+  role: "farmer" | "retailer" | "distributor";
+};
 import { Sparkles, TrendingUp, Gift, Clock, Loader2 } from "lucide-react";
 import { getMyLoyaltyPoints, getPointsHistory } from "@/actions/loyaltyActions";
 
@@ -25,7 +29,7 @@ type PointsHistoryItem = {
   createdAt: Date;
 };
 
-export default function LoyaltyPointsComponent() {
+export default function LoyaltyPointsComponent({ role }: Props) {
   const [loyaltyData, setLoyaltyData] = useState<LoyaltyData | null>(null);
   const [history, setHistory] = useState<PointsHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,20 +86,36 @@ export default function LoyaltyPointsComponent() {
     platinum: "💎",
   };
 
+  // Role-based logic for loyalty points
+  let tierLabel = "Loyalty Rewards";
+  let pointsDescription =
+    "Earn points with every purchase and redeem for discounts";
+  if (role === "farmer") {
+    tierLabel = "Farmer Loyalty Rewards";
+    pointsDescription =
+      "Earn points for every sale and redeem for agri-benefits.";
+  } else if (role === "retailer") {
+    tierLabel = "Retailer Loyalty Rewards";
+    pointsDescription =
+      "Earn points for every purchase and redeem for store credits.";
+  } else if (role === "distributor") {
+    tierLabel = "Distributor Loyalty Rewards";
+    pointsDescription =
+      "Earn points for every delivery and redeem for logistics perks.";
+  }
+
   return (
     <div className="py-8">
       {/* Header */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 mb-4">
           <Sparkles size={18} />
-          <span className="text-sm font-medium">Loyalty Rewards</span>
+          <span className="text-sm font-medium">{tierLabel}</span>
         </div>
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Your Loyalty Points
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          Earn points with every purchase and redeem for discounts
-        </p>
+        <p className="text-gray-600 dark:text-gray-400">{pointsDescription}</p>
       </div>
 
       {/* Tabs */}

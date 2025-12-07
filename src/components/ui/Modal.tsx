@@ -14,7 +14,7 @@ type ModalProps = {
   type: "login" | "signup";
 };
 
-export default function Modal({ isOpen, onClose, type }: ModalProps) {
+const Modal = ({ isOpen, onClose, type }: ModalProps) => {
   const [showSignup, setShowSignup] = useState(type === "signup");
 
   // FIX: Use useEffect to sync the internal state
@@ -80,6 +80,7 @@ export default function Modal({ isOpen, onClose, type }: ModalProps) {
                   <>
                     {/* --- 1. Credentials (Password) Form --- */}
                     <CredentialsSignInForm />
+
                     {/* --- 2. Email (Magic Link) Form --- */}
                     {/* Email provider for magic link login */}
                     {/** Divider for visual separation */}
@@ -146,4 +147,6 @@ export default function Modal({ isOpen, onClose, type }: ModalProps) {
       )}
     </AnimatePresence>
   );
-}
+};
+
+export default Modal;

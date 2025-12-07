@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+
+type Props = {
+  role: "farmer" | "retailer" | "distributor";
+};
 import { Crown, Check, Loader2, Zap, TrendingUp, Package } from "lucide-react";
 import {
   getMySubscription,
@@ -16,9 +20,20 @@ type SubscriptionData = {
   autoRenew: boolean;
 };
 
-const PLANS = [
+type Plan = {
+  tier: "free" | "business" | "enterprise";
+  name: string;
+  price: number;
+  billingPeriod: string;
+  features: string[];
+  color: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  popular?: boolean;
+};
+
+const FARMER_PLANS: Plan[] = [
   {
-    tier: "free" as const,
+    tier: "free",
     name: "Free",
     price: 0,
     billingPeriod: "Forever",
@@ -32,7 +47,7 @@ const PLANS = [
     icon: Package,
   },
   {
-    tier: "business" as const,
+    tier: "business",
     name: "Business",
     price: 999,
     billingPeriod: "per month",
@@ -49,7 +64,7 @@ const PLANS = [
     popular: true,
   },
   {
-    tier: "enterprise" as const,
+    tier: "enterprise",
     name: "Enterprise",
     price: 2499,
     billingPeriod: "per month",
@@ -68,7 +83,15 @@ const PLANS = [
   },
 ];
 
-export default function SubscriptionPlansComponent() {
+const RETAILER_PLANS: Plan[] = [
+  ...FARMER_PLANS,
+];
+
+const DISTRIBUTOR_PLANS: Plan[] = [
+  ...FARMER_PLANS,
+];
+
+export default function SubscriptionPlansComponent({ role }: Props) {
   const [currentSubscription, setCurrentSubscription] =
     useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,6 +145,10 @@ export default function SubscriptionPlansComponent() {
 
   const currentTier = currentSubscription?.tier || "free";
   const isActive = currentSubscription?.status === "active";
+
+  let PLANS = FARMER_PLANS;
+  if (role === "retailer") PLANS = RETAILER_PLANS;
+  if (role === "distributor") PLANS = DISTRIBUTOR_PLANS;
 
   return (
     <div className="space-y-6">
@@ -234,9 +261,7 @@ export default function SubscriptionPlansComponent() {
                   <div
                     className={`p-2 rounded-lg bg-${plan.color}-100 dark:bg-${plan.color}-900`}
                   >
-                    <Icon
-                      className={`w-6 h-6 text-${plan.color}-600 dark:text-${plan.color}-400`}
-                    />
+                    <Icon />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">

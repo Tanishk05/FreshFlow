@@ -25,6 +25,7 @@ import {
   toggleProduceVisibility,
   toggleProduceAvailability,
 } from "@/actions/produceActions";
+import Image from "next/image";
 
 type Produce = {
   _id: string;
@@ -64,10 +65,11 @@ export default function MyProducePage() {
     quantity: 0,
     unit: "kg" as Produce["unit"],
     pricePerUnit: 0,
-    image: "🌾",
+    image: "",
     harvestDate: new Date().toISOString().split("T")[0],
     shelfLifeDays: 7,
   });
+  const [imageUploading, setImageUploading] = useState(false);
 
   // Fetch produce on mount
   useEffect(() => {
@@ -108,7 +110,7 @@ export default function MyProducePage() {
       quantity: 0,
       unit: "kg",
       pricePerUnit: 0,
-      image: "🌾",
+      image: "",
       harvestDate: new Date().toISOString().split("T")[0],
       shelfLifeDays: 7,
     });
@@ -417,7 +419,17 @@ export default function MyProducePage() {
                         <div className="p-6 pb-4">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
-                              <div className="text-4xl">{item.image}</div>
+                              {item.image && item.image.startsWith("http") ? (
+                                <Image
+                                  src={item.image}
+                                  alt={item.name}
+                                  width={80}
+                                  height={80}
+                                  className="rounded-lg object-cover border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900"
+                                />
+                              ) : (
+                                <div className="text-4xl">{item.image}</div>
+                              )}
                               <div>
                                 <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
                                   {item.name}
@@ -690,37 +702,83 @@ export default function MyProducePage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Price per Unit (₹)
+                    Price per Unit
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.pricePerUnit || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        pricePerUnit: Number(e.target.value),
-                      })
-                    }
-                    placeholder="2.50"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.pricePerUnit || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          pricePerUnit: Number(e.target.value),
+                        })
+                      }
+                      placeholder="2.50"
+                      className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500"
+                    />
+                    <select
+                      value={formData.unit}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          unit: e.target.value as Produce["unit"],
+                        })
+                      }
+                      className="px-2 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="kg">kg</option>
+                      <option value="tons">tons</option>
+                      <option value="bags">bags</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Emoji Icon
+                    Upload Image
                   </label>
                   <input
-                    type="text"
-                    value={formData.image}
-                    onChange={(e) =>
-                      setFormData({ ...formData, image: e.target.value })
-                    }
-                    placeholder="🍅"
-                    maxLength={2}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-2xl text-center focus:ring-2 focus:ring-green-500"
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setImageUploading(true);
+                      const formDataUpload = new FormData();
+                      formDataUpload.append("file", file);
+                      try {
+                        const res = await fetch("/api/upload-produce-image", {
+                          method: "POST",
+                          body: formDataUpload,
+                        });
+                        const data = await res.json();
+                        if (data.url) {
+                          setFormData({ ...formData, image: data.url });
+                        } else {
+                          alert(data.error || "Image upload failed");
+                        }
+                      } catch (err) {
+                        alert("Image upload failed");
+                      }
+                      setImageUploading(false);
+                    }}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500"
+                    disabled={imageUploading}
                   />
+                  {imageUploading && (
+                    <div className="mt-2 text-green-600">Uploading...</div>
+                  )}
+                  {formData.image && !imageUploading && (
+                    <Image
+                      src={formData.image}
+                      alt="Produce Preview"
+                      height={200}
+                      width={200}
+                      className="mt-2 rounded-lg max-h-32 object-contain border border-gray-200 dark:border-gray-700"
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

@@ -833,10 +833,12 @@ function ProfileContent() {
                   )}
 
                   {activeTab === "subscription" && (
-                    <SubscriptionPlansComponent />
+                    <SubscriptionPlansComponent role={role} />
                   )}
 
-                  {activeTab === "loyalty" && <LoyaltyPointsComponent />}
+                  {activeTab === "loyalty" && (
+                    <LoyaltyPointsComponent role={role} />
+                  )}
                 </>
               )}
             </div>
