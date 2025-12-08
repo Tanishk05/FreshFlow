@@ -10,26 +10,31 @@ export default function EmailSignInForm() {
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  // Runtime environment check
+  const getProvider = () => {
+    // Use sendgrid in production, nodemailer in dev/local
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1") {
+        return "nodemailer";
+      }
+      return "sendgrid";
+    }
+    // Fallback to sendgrid
+    return "sendgrid";
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setStatus("loading");
 
     try {
-      // 'nodemailer' is the id we gave the provider in auth.ts
-      let res;
-      if (process.env.NEXT_PRODUCTION === "true") {
-        res = await signIn("sendgrid", {
-          email,
-          redirect: false, // Don't redirect the user, stay in the modal
-        });
-      } else {
-        res = await signIn("nodemailer", {
-          email,
-          redirect: false, // Don't redirect the user, stay in the modal
-        });
-      }
-
+      const provider = getProvider();
+      const res = await signIn(provider, {
+        email,
+        redirect: false,
+      });
       if (res?.ok) {
         setStatus("success");
       } else {
@@ -51,7 +56,7 @@ export default function EmailSignInForm() {
           Check your email
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-300">
-          A magic link has been sent to **{email}**.
+          A magic link has been sent to <b>{email}</b>.
         </p>
       </div>
     );
