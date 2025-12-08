@@ -16,7 +16,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     ...authConfig.providers,
     process.env.NEXT_PRODUCTION === "true" && process.env.SENDGRID_API_KEY
-      ? Sendgrid
+      ? Sendgrid({ from: process.env.EMAIL_FROM })
       : Nodemailer({
           server: process.env.EMAIL_SERVER,
           from: process.env.EMAIL_FROM,
