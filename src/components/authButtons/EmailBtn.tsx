@@ -17,10 +17,18 @@ export default function EmailSignInForm() {
 
     try {
       // 'nodemailer' is the id we gave the provider in auth.ts
-      const res = await signIn("nodemailer", {
-        email,
-        redirect: false, // Don't redirect the user, stay in the modal
-      });
+      let res;
+      if (process.env.NEXT_PRODUCTION === "true") {
+        res = await signIn("sendgrid", {
+          email,
+          redirect: false, // Don't redirect the user, stay in the modal
+        });
+      } else {
+        res = await signIn("nodemailer", {
+          email,
+          redirect: false, // Don't redirect the user, stay in the modal
+        });
+      }
 
       if (res?.ok) {
         setStatus("success");
@@ -90,7 +98,7 @@ export default function EmailSignInForm() {
       >
         <Mail className="w-4 h-4" />
         {status === "loading" ? "Sending..." : "Continue with Email"}
-      </motion.button> 
+      </motion.button>
     </form>
   );
 }
