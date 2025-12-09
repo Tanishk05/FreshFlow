@@ -415,30 +415,36 @@ export default function MyProducePage() {
                         whileHover={{ y: -5 }}
                         className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden"
                       >
+                        {/* Image Header */}
+                        {item.image && item.image.startsWith("http") ? (
+                          <div className="relative w-full h-48 bg-gray-100 dark:bg-gray-900 overflow-hidden">
+                            <Image
+                              src={item.image}
+                              alt={item.name}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              onError={(e) => {
+                                // Hide image on error, fallback will show
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-48 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 flex items-center justify-center">
+                            <span className="text-6xl">🌾</span>
+                          </div>
+                        )}
+
                         {/* Card Header */}
                         <div className="p-6 pb-4">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              {item.image && item.image.startsWith("http") ? (
-                                <Image
-                                  src={item.image}
-                                  alt={item.name}
-                                  width={80}
-                                  height={80}
-                                  className="rounded-lg object-cover border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900"
-                                />
-                              ) : (
-                                <div className="text-4xl">{item.image}</div>
-                              )}
-                              <div>
-                                <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
-                                  {item.name}
-                                </h3>
-                                <span className="text-xs px-2 py-1 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 capitalize">
-                                  {item.category}
-                                </span>
-                              </div>
-                            </div>
+                          <div className="mb-4">
+                            <h3 className="font-semibold text-lg text-gray-900 dark:text-white mb-2">
+                              {item.name}
+                            </h3>
+                            <span className="text-xs px-2 py-1 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 capitalize">
+                              {item.category}
+                            </span>
                           </div>
 
                           {/* Quantity & Price */}
@@ -737,8 +743,26 @@ export default function MyProducePage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Upload Image
+                    Crop Image
                   </label>
+                  {formData.image && !imageUploading && (
+                    <div className="mb-3">
+                      <Image
+                        src={formData.image}
+                        alt="Produce Preview"
+                        height={200}
+                        width={200}
+                        className="rounded-lg max-h-32 object-contain border border-gray-200 dark:border-gray-700"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, image: "" })}
+                        className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                      >
+                        Remove Image
+                      </button>
+                    </div>
+                  )}
                   <input
                     type="file"
                     accept="image/*"
@@ -764,20 +788,13 @@ export default function MyProducePage() {
                       }
                       setImageUploading(false);
                     }}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400"
                     disabled={imageUploading}
                   />
                   {imageUploading && (
-                    <div className="mt-2 text-green-600">Uploading...</div>
-                  )}
-                  {formData.image && !imageUploading && (
-                    <Image
-                      src={formData.image}
-                      alt="Produce Preview"
-                      height={200}
-                      width={200}
-                      className="mt-2 rounded-lg max-h-32 object-contain border border-gray-200 dark:border-gray-700"
-                    />
+                    <div className="mt-2 text-green-600 dark:text-green-400">
+                      Uploading...
+                    </div>
                   )}
                 </div>
 

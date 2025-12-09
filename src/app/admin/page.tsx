@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { isAdmin, getUserStats } from "@/actions/adminActions";
-import { getSystemStats } from "@/actions/settingsActions";
+import { getSystemStats, getSystemSettings } from "@/actions/settingsActions";
 
 interface Stats {
   total: number;
@@ -43,22 +43,48 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [users, system] = await Promise.all([
+      const [users, system, settings] = await Promise.all([
         getUserStats(),
         getSystemStats(),
+        getSystemSettings(),
       ]);
       setUserStats(users);
+
+      // Calculate active AI features from settings
+      const activeAIFeatures = settings.aiFeatures.enabled
+        ? [
+            settings.aiFeatures.dynamicPricing,
+            settings.aiFeatures.marketIntelligence,
+            settings.aiFeatures.personalizedInsights,
+            settings.aiFeatures.demandForecasting,
+          ].filter(Boolean).length
+        : 0;
 
       // Transform system stats to match our interface
       setSystemStats({
         totalUsers: system.users.total,
-        activeAIFeatures: 4, // You can calculate this from settings
+        activeAIFeatures: activeAIFeatures,
         totalEmailsSent: system.ai.emailsSentToday,
         apiCallsToday: system.ai.apiCallsToday,
         systemHealth: "healthy",
       });
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+      // Set default values on error
+      setUserStats({
+        total: 0,
+        farmers: 0,
+        distributors: 0,
+        retailers: 0,
+        verified: 0,
+      });
+      setSystemStats({
+        totalUsers: 0,
+        activeAIFeatures: 0,
+        totalEmailsSent: 0,
+        apiCallsToday: 0,
+        systemHealth: "warning",
+      });
     } finally {
       setLoading(false);
     }

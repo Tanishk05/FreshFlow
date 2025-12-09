@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { FormattedDate } from "@/components/dashboard/FormattedDate";
 import { useRouter } from "next/navigation";
@@ -97,9 +98,23 @@ export default function CropInventory({
                   >
                     <td className="py-4 px-2">
                       <div className="flex items-center gap-3">
-                        <span className="text-3xl">{item.image}</span>
-                        <div>
-                          <div className="text-gray-900 dark:text-gray-100 font-semibold">
+                        {item.image && item.image.startsWith("http") ? (
+                          <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-700">
+                            <Image
+                              src={item.image}
+                              alt={item.name}
+                              fill
+                              className="object-cover"
+                              sizes="48px"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl flex-shrink-0">
+                            🌾
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-gray-900 dark:text-gray-100 font-semibold truncate">
                             {item.name}
                           </div>
                           <div className="text-gray-500 dark:text-gray-400 text-xs capitalize">

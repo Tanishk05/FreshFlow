@@ -28,6 +28,8 @@ export interface User {
   role?: UserRole | null; // Your custom field
   address?: UserAddress; // Address with coordinates
   isAdmin?: boolean; // Admin flag
+  banned?: boolean; // Ban status
+  bannedAt?: Date | null; // When user was banned
   password?: string | null; // Hashed password for credentials login
   // Email verification fields
   verifyToken?: string | null;

@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import client from "@/lib/db";
 
-// System settings interface
+// System settings interface (serialized for client components)
 export interface SystemSettings {
   _id?: string;
   aiFeatures: {
@@ -34,7 +34,7 @@ export interface SystemSettings {
     enabled: boolean;
     message: string;
   };
-  updatedAt: Date;
+  updatedAt: string; // ISO string for client components
   updatedBy: string;
 }
 
@@ -56,7 +56,8 @@ export async function getSystemSettings(): Promise<SystemSettings> {
 
   if (!settings) {
     // Create default settings
-    const defaultSettings: SystemSettings = {
+    const now = new Date();
+    const defaultSettings = {
       aiFeatures: {
         enabled: true,
         dynamicPricing: true,
@@ -85,15 +86,29 @@ export async function getSystemSettings(): Promise<SystemSettings> {
         enabled: false,
         message: "",
       },
-      updatedAt: new Date(),
+      updatedAt: now,
       updatedBy: session.user.email || "system",
     };
 
     await settingsCollection.insertOne(defaultSettings);
-    settings = { ...defaultSettings, _id: "" };
+    settings = defaultSettings;
   }
 
-  return settings as SystemSettings;
+  // Serialize for client components: convert ObjectId to string and Date to ISO string
+  return {
+    _id: settings._id?.toString(),
+    aiFeatures: settings.aiFeatures,
+    emailNotifications: settings.emailNotifications,
+    features: settings.features,
+    apiLimits: settings.apiLimits,
+    maintenance: settings.maintenance,
+    updatedAt: settings.updatedAt instanceof Date 
+      ? settings.updatedAt.toISOString() 
+      : typeof settings.updatedAt === 'string' 
+        ? settings.updatedAt 
+        : new Date().toISOString(),
+    updatedBy: settings.updatedBy,
+  } as SystemSettings;
 }
 
 // Update system settings (admin only)
@@ -298,23 +313,144 @@ export async function getSystemStats(): Promise<{
     throw new Error("Admin access required");
   }
 
-  // TODO: Implement actual statistics gathering
-  return {
-    users: {
-      total: 0,
-      farmers: 0,
-      distributors: 0,
-      retailers: 0,
-    },
-    activity: {
-      todayOrders: 0,
-      todayRevenue: 0,
-      activeShipments: 0,
-    },
-    ai: {
-      apiCallsToday: 0,
-      cacheHitRate: 0,
-      emailsSentToday: 0,
-    },
-  };
+  try {
+    const dbClient = await client;
+    const db = dbClient.db(process.env.MONGODB_DB);
+
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Get user statistics
+    const usersCollection = db.collection("users");
+    const [totalUsers, farmers, distributors, retailers] = await Promise.all([
+      usersCollection.countDocuments(),
+      usersCollection.countDocuments({ role: "farmer" }),
+      usersCollection.countDocuments({ role: "distributor" }),
+      usersCollection.countDocuments({ role: "retailer" }),
+    ]);
+
+    // Get order statistics
+    const ordersCollection = db.collection("orders");
+    const retailerOrdersCollection = db.collection("retailer_orders");
+
+    // Today's orders (from both collections)
+    const [todayOrdersCount, todayRetailerOrdersCount] = await Promise.all([
+      ordersCollection.countDocuments({
+        createdAt: { $gte: today, $lt: tomorrow },
+      }),
+      retailerOrdersCollection.countDocuments({
+        createdAt: { $gte: today, $lt: tomorrow },
+      }),
+    ]);
+
+    const todayOrders = todayOrdersCount + todayRetailerOrdersCount;
+
+    // Today's revenue (sum of totalPrice from orders and totalAmount + deliveryFee from retailer_orders)
+    const [todayOrdersRevenue, todayRetailerOrdersRevenue] = await Promise.all([
+      ordersCollection
+        .aggregate([
+          {
+            $match: {
+              createdAt: { $gte: today, $lt: tomorrow },
+              status: { $in: ["approved", "completed"] },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: "$totalPrice" },
+            },
+          },
+        ])
+        .toArray(),
+      retailerOrdersCollection
+        .aggregate([
+          {
+            $match: {
+              createdAt: { $gte: today, $lt: tomorrow },
+              status: { $in: ["assigned", "in-transit", "delivered"] },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: {
+                $sum: {
+                  $add: [
+                    "$totalAmount",
+                    { $ifNull: ["$finalDeliveryFee", "$deliveryFee"] },
+                  ],
+                },
+              },
+            },
+          },
+        ])
+        .toArray(),
+    ]);
+
+    const todayRevenue =
+      (todayOrdersRevenue[0]?.total || 0) +
+      (todayRetailerOrdersRevenue[0]?.total || 0);
+
+    // Active shipments (in-transit, picked-up, awaiting-pickup)
+    const shipmentsCollection = db.collection("shipments");
+    const activeShipments = await shipmentsCollection.countDocuments({
+      status: { $in: ["awaiting-pickup", "picked-up", "in-transit"] },
+    });
+
+    // Email statistics (emails sent today)
+    const alertEmailsCollection = db.collection("alertEmails");
+    const emailsSentToday = await alertEmailsCollection.countDocuments({
+      sentAt: { $gte: today, $lt: tomorrow },
+    });
+
+    // AI API calls - This would need to be tracked separately
+    // For now, we'll estimate based on settings or return 0
+    // You can implement a separate collection to track AI API calls
+    const apiCallsToday = 0; // TODO: Implement AI API call tracking
+    const cacheHitRate = 0; // TODO: Implement cache hit rate tracking
+
+    return {
+      users: {
+        total: totalUsers,
+        farmers,
+        distributors,
+        retailers,
+      },
+      activity: {
+        todayOrders,
+        todayRevenue: Math.round(todayRevenue * 100) / 100, // Round to 2 decimal places
+        activeShipments,
+      },
+      ai: {
+        apiCallsToday,
+        cacheHitRate,
+        emailsSentToday,
+      },
+    };
+  } catch (error) {
+    console.error("Error getting system stats:", error);
+    // Return default values on error
+    return {
+      users: {
+        total: 0,
+        farmers: 0,
+        distributors: 0,
+        retailers: 0,
+      },
+      activity: {
+        todayOrders: 0,
+        todayRevenue: 0,
+        activeShipments: 0,
+      },
+      ai: {
+        apiCallsToday: 0,
+        cacheHitRate: 0,
+        emailsSentToday: 0,
+      },
+    };
+  }
 }

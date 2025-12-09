@@ -15,6 +15,12 @@ import {
 } from "@/actions/adminActions";
 import type { User } from "@/models/User";
 
+// Helper to get user ID as string
+// After serialization in server actions, _id is always a string, but TypeScript doesn't know that
+const getUserId = (user: User): string => {
+  return typeof user._id === 'string' ? user._id : String(user._id);
+};
+
 export default function AdminUsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
@@ -289,7 +295,7 @@ export default function AdminUsersPage() {
                 ) : (
                   users.map((user) => (
                     <tr
-                      key={user._id.toString()}
+                      key={getUserId(user)}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                       <td className="px-6 py-4">
@@ -341,6 +347,11 @@ export default function AdminUsersPage() {
                           ) : (
                             <span className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                               <span className="mr-1">○</span> Unverified
+                            </span>
+                          )}
+                          {user.banned && (
+                            <span className="flex items-center text-xs text-red-600 dark:text-red-400">
+                              <span className="mr-1">🚫</span> Banned
                             </span>
                           )}
                         </div>
@@ -566,7 +577,7 @@ function UserManagementModal({
               <option value="retailer">Retailer</option>
             </select>
             <button
-              onClick={() => onUpdateRole(user._id.toString(), newRole)}
+              onClick={() => onUpdateRole(getUserId(user), newRole)}
               disabled={loading || newRole === user.role}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
             >
@@ -579,7 +590,7 @@ function UserManagementModal({
         <div className="space-y-3">
           {/* Toggle Admin Status */}
           <button
-            onClick={() => onToggleAdmin(user._id.toString(), !user.isAdmin)}
+            onClick={() => onToggleAdmin(getUserId(user), !user.isAdmin)}
             disabled={loading}
             className={`w-full px-4 py-2 ${
               user.isAdmin
@@ -593,7 +604,7 @@ function UserManagementModal({
 
           {!user.emailVerified && (
             <button
-              onClick={() => onVerifyEmail(user._id.toString())}
+              onClick={() => onVerifyEmail(getUserId(user))}
               disabled={loading}
               className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
             >
@@ -601,16 +612,26 @@ function UserManagementModal({
             </button>
           )}
 
-          <button
-            onClick={() => onToggleBan(user._id.toString(), true)}
-            disabled={loading}
-            className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
-          >
-            🚫 Ban User
-          </button>
+          {user.banned ? (
+            <button
+              onClick={() => onToggleBan(getUserId(user), false)}
+              disabled={loading}
+              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
+            >
+              ✓ Unban User
+            </button>
+          ) : (
+            <button
+              onClick={() => onToggleBan(getUserId(user), true)}
+              disabled={loading}
+              className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
+            >
+              🚫 Ban User
+            </button>
+          )}
 
           <button
-            onClick={() => onDelete(user._id.toString())}
+            onClick={() => onDelete(getUserId(user))}
             disabled={loading}
             className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
           >

@@ -57,8 +57,25 @@ export const proxy = auth((req) => {
 
   const isLoggedIn = !!session?.user;
   const userRole = session?.user?.role as string | null;
+  const isAdmin = session?.user?.isAdmin === true;
 
-  // Use centralized auth handlers
+  // Allow admin routes for admin users (bypass role-based restrictions)
+  if (req.nextUrl.pathname.startsWith("/admin")) {
+    if (!isLoggedIn) {
+      // Not logged in, redirect to home
+      const redirect = Response.redirect(new URL("/", req.nextUrl));
+      redirect.headers.set("X-Content-Type-Options", "nosniff");
+      redirect.headers.set("X-Frame-Options", "DENY");
+      redirect.headers.set("X-XSS-Protection", "1; mode=block");
+      return redirect;
+    }
+    // Admin access is checked in the page/layout components
+    // We just need to allow the route if user is logged in
+    // The isAdmin() function will handle the actual admin check
+    return response;
+  }
+
+  // Use centralized auth handlers for non-admin routes
   const authResult = authorizeUser({
     isLoggedIn,
     userRole,

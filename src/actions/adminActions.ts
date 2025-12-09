@@ -7,12 +7,38 @@ import { ObjectId } from "mongodb";
 // Check if user is admin
 export async function isAdmin(): Promise<boolean> {
   const session = await auth();
-  if (!session?.user?.email) return false;
+  if (!session?.user?.id) return false;
 
-  // Add your admin emails here
-  const adminEmails = ["tanishkshrivastava6@gmail.com", "admin@freshflow.com"];
+  // First, check if isAdmin is set in the session (from token)
+  if (session.user.isAdmin === true) {
+    return true;
+  }
 
-  return adminEmails.includes(session.user.email);
+  // Fallback: Check the database directly to ensure we have the latest value
+  // This handles cases where isAdmin was changed but session hasn't refreshed
+  try {
+    const usersCollection = await getUsersCollection();
+    const user = await usersCollection.findOne({
+      _id: new ObjectId(session.user.id),
+    });
+
+    if (user?.isAdmin === true) {
+      return true;
+    }
+  } catch (error) {
+    console.error("Error checking admin status:", error);
+  }
+
+  // Legacy: Also check against hardcoded admin emails as fallback
+  // This ensures existing admins still work
+  if (session.user.email) {
+    const adminEmails = ["tanishkshrivastava6@gmail.com", "admin@freshflow.com"];
+    if (adminEmails.includes(session.user.email)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Get all users with pagination
@@ -59,8 +85,29 @@ export async function getAllUsers(
     .limit(limit)
     .toArray();
 
+  // Serialize users for client components: convert ObjectId to string and Date to ISO string
+  const serializedUsers = users.map((user) => ({
+    ...user,
+    _id: user._id.toString(),
+    emailVerified: user.emailVerified
+      ? user.emailVerified instanceof Date
+        ? user.emailVerified.toISOString()
+        : user.emailVerified
+      : null,
+    verifyTokenExpires: user.verifyTokenExpires
+      ? user.verifyTokenExpires instanceof Date
+        ? user.verifyTokenExpires.toISOString()
+        : user.verifyTokenExpires
+      : null,
+    bannedAt: user.bannedAt
+      ? user.bannedAt instanceof Date
+        ? user.bannedAt.toISOString()
+        : user.bannedAt
+      : null,
+  }));
+
   return {
-    users,
+    users: serializedUsers,
     total,
     pages,
     currentPage: page,
@@ -192,7 +239,32 @@ export async function getUserDetails(userId: string): Promise<User | null> {
   }
 
   const usersCollection = await getUsersCollection();
-  return await usersCollection.findOne({ _id: new ObjectId(userId) });
+  const user = await usersCollection.findOne({ _id: new ObjectId(userId) });
+
+  if (!user) {
+    return null;
+  }
+
+  // Serialize user for client components: convert ObjectId to string and Date to ISO string
+  return {
+    ...user,
+    _id: user._id.toString(),
+    emailVerified: user.emailVerified
+      ? user.emailVerified instanceof Date
+        ? user.emailVerified.toISOString()
+        : user.emailVerified
+      : null,
+    verifyTokenExpires: user.verifyTokenExpires
+      ? user.verifyTokenExpires instanceof Date
+        ? user.verifyTokenExpires.toISOString()
+        : user.verifyTokenExpires
+      : null,
+    bannedAt: user.bannedAt
+      ? user.bannedAt instanceof Date
+        ? user.bannedAt.toISOString()
+        : user.bannedAt
+      : null,
+  };
 }
 
 // Ban/Unban user
