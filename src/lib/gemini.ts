@@ -79,7 +79,17 @@ export async function generateJSON<T>(
       text.match(/```json\n?([\s\S]*?)\n?```/) || text.match(/\{[\s\S]*\}/);
     const jsonText = jsonMatch ? jsonMatch[1] || jsonMatch[0] : text;
 
-    return JSON.parse(jsonText);
+    // Security: Validate JSON doesn't contain executable code
+    if (jsonText.includes("__proto__") || jsonText.includes("constructor")) {
+      throw new Error("Invalid JSON structure detected");
+    }
+
+    try {
+      return JSON.parse(jsonText);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      throw new Error("Failed to parse JSON response from AI");
+    }
   });
 }
 
