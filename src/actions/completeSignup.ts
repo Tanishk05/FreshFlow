@@ -3,12 +3,12 @@
 "use server";
 
 import { z, ZodFlattenedError } from "zod";
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
+import { userRepository } from "@/repositories/user.repository";
 import { redirect } from "next/navigation";
 import { ObjectId } from "mongodb";
-
-// --- Import our new helper and types ---
-import { getUsersCollection, User, UserRole } from "@/models/User";
+import type { User, UserRole } from "@/models/User";
+import { ValidationChains } from "@/services/validation-chain.service";
 
 // Define the schema
 const signupSchema = z.object({
@@ -41,8 +41,11 @@ export async function completeSignup(
   formData: FormData // <-- 2. formData is now second
 ): Promise<FormState> {
   // <-- 3. Return type is FormState
-  const session = await auth();
-  if (!session?.user?.id) {
+  let userId: string;
+  try {
+    const authResult = await requireAuth();
+    userId = authResult.userId;
+  } catch (error) {
     return { error: "Not authenticated.", details: undefined };
   }
 
@@ -70,26 +73,44 @@ export async function completeSignup(
     longitude,
   } = result.data;
 
-  const needsProfileData =
-    session.user.provider === "nodemailer" || !session.user.name;
-
-  if (needsProfileData && (!name || !username)) {
+  // Note: Provider check would need to be done via session if needed
+  // For now, we'll check if name/username are provided
+  if (!name || !username) {
     return {
-      error: "Name and username are required for email sign-up.",
+      error: "Name and username are required.",
       details: undefined,
     };
   }
 
   try {
-    // --- Use the new helper ---
-    const usersCollection = await getUsersCollection();
+    // Use Chain of Responsibility for validation
+    const validationChain = ValidationChains.signupValidation();
+    const validationResult = await validationChain.handle({
+      role,
+      name,
+      username,
+      phone,
+      latitude,
+      longitude,
+      email: data.email, // If available
+    });
+
+    if (!validationResult.valid) {
+      return {
+        error: validationResult.error || "Validation failed",
+        details: undefined,
+      };
+    }
 
     // Check if username is already taken
     if (username) {
-      const existingUsername = await usersCollection.findOne({
-        username,
-        _id: { $ne: new ObjectId(session.user.id) },
-      });
+      const existingUsers = await userRepository.findMany(
+        { search: username },
+        { page: 1, limit: 10 }
+      );
+      const existingUsername = existingUsers.data.find(
+        (u) => u.username === username && u._id.toString() !== userId
+      );
       if (existingUsername) {
         return {
           error: "Username already taken. Please choose another.",
@@ -100,10 +121,13 @@ export async function completeSignup(
 
     // Check if phone is already in use
     if (phone) {
-      const existingPhone = await usersCollection.findOne({
-        phone,
-        _id: { $ne: new ObjectId(session.user.id) },
-      });
+      const existingUsers = await userRepository.findMany(
+        { search: phone },
+        { page: 1, limit: 10 }
+      );
+      const existingPhone = existingUsers.data.find(
+        (u) => u.phone === phone && u._id.toString() !== userId
+      );
       if (existingPhone) {
         return {
           error: "Phone number already in use.",
@@ -125,36 +149,9 @@ export async function completeSignup(
     if (username) updateData.username = username;
     if (phone) updateData.phone = phone;
 
-    // Validate and build address object - latitude and longitude are now required
-    if (!latitude || !longitude) {
-      return {
-        error: "Location coordinates are required for delivery calculations.",
-        details: undefined,
-      };
-    }
-
+    // Parse coordinates (already validated by chain)
     const parsedLat = parseFloat(latitude);
     const parsedLon = parseFloat(longitude);
-
-    if (isNaN(parsedLat) || isNaN(parsedLon)) {
-      return {
-        error: "Invalid coordinates. Please provide valid numbers.",
-        details: undefined,
-      };
-    }
-
-    if (
-      parsedLat < -90 ||
-      parsedLat > 90 ||
-      parsedLon < -180 ||
-      parsedLon > 180
-    ) {
-      return {
-        error:
-          "Coordinates out of range. Latitude: -90 to 90, Longitude: -180 to 180.",
-        details: undefined,
-      };
-    }
 
     updateData.address = {
       street: street || undefined,
@@ -166,10 +163,8 @@ export async function completeSignup(
       longitude: parsedLon,
     };
 
-    await usersCollection.updateOne(
-      { _id: new ObjectId(session.user.id) },
-      { $set: updateData }
-    );
+    // Update user with all the data
+    await userRepository.update(userId, updateData);
   } catch (e) {
     console.error(e);
     return {

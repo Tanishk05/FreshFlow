@@ -1,6 +1,7 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
+import { userRepository } from "@/repositories/user.repository";
 import { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
 import {
@@ -17,21 +18,19 @@ import {
  */
 export async function getMySubscription() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const subscriptionsCollection = await getSubscriptionsCollection();
     const subscription = await subscriptionsCollection.findOne({
-      userId: new ObjectId(session.user.id),
+      userId: new ObjectId(userId),
       status: "active",
     });
 
     if (!subscription) {
       // Return free plan details
+      const user = await userRepository.findById(userId);
       const userType =
-        (session.user.role as SubscriptionUserType) || "retailer";
+        (user?.role as SubscriptionUserType) || "retailer";
       const freePlan = getSubscriptionPlan(userType, "free");
 
       return {
@@ -64,12 +63,10 @@ export async function getMySubscription() {
  */
 export async function getAvailablePlans() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const userType = (session.user.role as SubscriptionUserType) || "retailer";
+    const { userId } = await requireAuth();
+    
+    const user = await userRepository.findById(userId);
+    const userType = (user?.role as SubscriptionUserType) || "retailer";
     const plans = SUBSCRIPTION_PLANS[userType];
 
     return {
@@ -87,12 +84,10 @@ export async function getAvailablePlans() {
  */
 export async function subscribeToPlan(tier: SubscriptionTier) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const userType = (session.user.role as SubscriptionUserType) || "retailer";
+    const { userId } = await requireAuth();
+    
+    const user = await userRepository.findById(userId);
+    const userType = (user?.role as SubscriptionUserType) || "retailer";
     const plan = getSubscriptionPlan(userType, tier);
 
     if (!plan) {
@@ -108,7 +103,7 @@ export async function subscribeToPlan(tier: SubscriptionTier) {
     // Cancel any existing active subscription
     await subscriptionsCollection.updateMany(
       {
-        userId: new ObjectId(session.user.id),
+        userId: new ObjectId(userId),
         status: "active",
       },
       {
@@ -126,7 +121,7 @@ export async function subscribeToPlan(tier: SubscriptionTier) {
     endDate.setMonth(endDate.getMonth() + 1); // 1 month subscription
 
     const subscription: Subscription = {
-      userId: new ObjectId(session.user.id),
+      userId: new ObjectId(userId),
       userType,
       tier,
       status: "active",
@@ -166,16 +161,13 @@ export async function subscribeToPlan(tier: SubscriptionTier) {
  */
 export async function cancelSubscription() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const subscriptionsCollection = await getSubscriptionsCollection();
 
     const result = await subscriptionsCollection.updateOne(
       {
-        userId: new ObjectId(session.user.id),
+        userId: new ObjectId(userId),
         status: "active",
       },
       {
@@ -211,10 +203,8 @@ export async function cancelSubscription() {
  */
 export async function getSubscriptionStats() {
   try {
-    const session = await auth();
-    if (!session?.user?.id || !session.user.isAdmin) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { requireAdmin } = await import("@/services/auth.service");
+    await requireAdmin();
 
     const subscriptionsCollection = await getSubscriptionsCollection();
 

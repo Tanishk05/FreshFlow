@@ -29,9 +29,10 @@ import PricingSection from "@/components/sections/PricingSection";
 import CTASection from "@/components/sections/CTASection";
 import Footer from "@/components/sections/Footer";
 
-// Scene
+// Scene - Lazy loaded only on desktop after delay
 const HeroScene = dynamic(() => import("@/components/scene/HeroScene"), {
   ssr: false,
+  loading: () => null, // No loading indicator needed
 });
 
 export default function Home() {
@@ -39,6 +40,7 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"login" | "signup">("login");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showScene, setShowScene] = useState(false);
 
   const [isMounted, setIsMounted] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -51,6 +53,18 @@ export default function Home() {
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 2000);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Only load 3D scene on desktop after a delay to prioritize content
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      // Delay loading by 1 second to prioritize content
+      const timer = setTimeout(() => {
+        setShowScene(true);
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   useEffect(() => {
@@ -111,7 +125,8 @@ export default function Home() {
       </AnimatePresence>
 
       <div className="text-gray-900 dark:text-gray-100 transition-colors duration-300">
-        <HeroScene />
+        {/* Only render HeroScene if showScene is true (desktop, after delay) */}
+        {showScene && <HeroScene />}
         <Modal isOpen={modalOpen} onClose={closeModal} type={modalType} />
 
         {/* --- 2. THE FIX ---

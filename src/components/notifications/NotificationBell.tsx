@@ -22,16 +22,34 @@ export default function NotificationBell() {
     loadCount().catch(console.error);
 
     // WebSocket: update unread count in real time
-    const socket = getSocket();
-    socket.on(
-      "notification-update",
-      (update: { type: string; notification: any }) => {
-        // For simplicity, just reload the count on any notification event
-        loadCount().catch(console.error);
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted) return;
+
+        socketInstance.on(
+          "notification-update",
+          (update: { type: string; notification: any }) => {
+            if (!isMounted) return;
+            // For simplicity, just reload the count on any notification event
+            loadCount().catch(console.error);
+          }
+        );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
       }
-    );
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("notification-update");
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.off("notification-update");
+      }
     };
   }, []);
 

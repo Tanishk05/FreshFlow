@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
 import { ObjectId } from "mongodb";
 import { getNotificationCollection, Notification } from "@/models/Notification";
 import { getPushSubscriptionCollection } from "@/models/PushSubscription";
@@ -128,14 +128,12 @@ async function sendPushNotification(
 export async function getMyNotifications(
   limit: number = 50
 ): Promise<Notification[]> {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  const userId = new ObjectId(session.user.id);
+  const { userId } = await requireAuth();
+  const userIdObj = new ObjectId(userId);
   const notificationCollection = await getNotificationCollection();
 
   const notifications = await notificationCollection
-    .find({ userId })
+    .find({ userId: userIdObj })
     .sort({ createdAt: -1 })
     .limit(limit)
     .toArray();
@@ -145,25 +143,21 @@ export async function getMyNotifications(
 
 // Get unread notification count
 export async function getUnreadCount(): Promise<number> {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  const userId = new ObjectId(session.user.id);
+  const { userId } = await requireAuth();
+  const userIdObj = new ObjectId(userId);
   const notificationCollection = await getNotificationCollection();
 
-  return await notificationCollection.countDocuments({ userId, read: false });
+  return await notificationCollection.countDocuments({ userId: userIdObj, read: false });
 }
 
 // Mark notification as read
 export async function markAsRead(notificationId: string): Promise<void> {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  const userId = new ObjectId(session.user.id);
+  const { userId } = await requireAuth();
+  const userIdObj = new ObjectId(userId);
   const notificationCollection = await getNotificationCollection();
 
   await notificationCollection.updateOne(
-    { _id: new ObjectId(notificationId), userId },
+    { _id: new ObjectId(notificationId), userId: userIdObj },
     { $set: { read: true, readAt: new Date() } }
   );
 
@@ -172,14 +166,12 @@ export async function markAsRead(notificationId: string): Promise<void> {
 
 // Mark all notifications as read
 export async function markAllAsRead(): Promise<void> {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  const userId = new ObjectId(session.user.id);
+  const { userId } = await requireAuth();
+  const userIdObj = new ObjectId(userId);
   const notificationCollection = await getNotificationCollection();
 
   await notificationCollection.updateMany(
-    { userId, read: false },
+    { userId: userIdObj, read: false },
     { $set: { read: true, readAt: new Date() } }
   );
 
@@ -191,21 +183,18 @@ export async function subscribeToPush(
   subscription: PushSubscriptionJSON
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     if (!subscription.endpoint || !subscription.keys) {
       return { success: false, error: "Invalid subscription" };
     }
 
-    const userId = new ObjectId(session.user.id);
+    const userIdObj = new ObjectId(userId);
     const subscriptionCollection = await getPushSubscriptionCollection();
 
     // Check if subscription already exists
     const existing = await subscriptionCollection.findOne({
-      userId,
+      userId: userIdObj,
       endpoint: subscription.endpoint,
     });
 
@@ -226,7 +215,7 @@ export async function subscribeToPush(
     } else {
       // Create new subscription
       await subscriptionCollection.insertOne({
-        userId,
+        userId: userIdObj,
         endpoint: subscription.endpoint,
         keys: {
           p256dh: subscription.keys.p256dh!,
@@ -250,13 +239,11 @@ export async function unsubscribeFromPush(
   endpoint: string
 ): Promise<{ success: boolean }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
-
-    const userId = new ObjectId(session.user.id);
+    const { userId } = await requireAuth();
+    const userIdObj = new ObjectId(userId);
     const subscriptionCollection = await getPushSubscriptionCollection();
 
-    await subscriptionCollection.deleteOne({ userId, endpoint });
+    await subscriptionCollection.deleteOne({ userId: userIdObj, endpoint });
 
     return { success: true };
   } catch (error) {

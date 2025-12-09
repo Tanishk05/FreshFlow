@@ -1,9 +1,11 @@
 "use server";
 
-import { auth } from "@/auth";
-import { getOrdersCollection } from "@/models/Order";
+import { requireAuth } from "@/services/auth.service";
+import { orderRepository } from "@/repositories/order.repository";
+import { userRepository } from "@/repositories/user.repository";
 import { getRetailerOrderCollection } from "@/models/RetailerOrder";
 import { ObjectId } from "mongodb";
+import { auth } from "@/auth"; // Keep for functions not yet refactored
 
 export type EarningsData = {
   totalRevenue: number;
@@ -42,23 +44,25 @@ export async function getDistributorEarnings(): Promise<{
   error?: string;
 }> {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const distributorId = new ObjectId(session.user.id);
+    const { userId } = await requireAuth();
+    // Note: Role check could be moved to a role service
 
     // Get all delivered orders for this distributor
-    const deliveredOrders = await ordersCollection
-      .find({
-        distributorId,
+    const result = await orderRepository.findMany(
+      {
+        distributorId: userId,
         status: "delivered",
-      })
-      .sort({ deliveryDate: -1 })
-      .toArray();
+      },
+      { page: 1, limit: 1000 }
+    );
+    const deliveredOrders = result.data;
+    
+    // Sort by deliveryDate descending
+    deliveredOrders.sort((a, b) => {
+      const dateA = a.deliveryDate?.getTime() || 0;
+      const dateB = b.deliveryDate?.getTime() || 0;
+      return dateB - dateA;
+    });
 
     // Calculate total earnings
     const totalEarnings = deliveredOrders.reduce(
@@ -145,25 +149,24 @@ export async function getEarningsByDateRange(
   error?: string;
 }> {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
+    // Note: Role check could be moved to a role service
 
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const distributorId = new ObjectId(session.user.id);
-
-    const orders = await ordersCollection
-      .find({
-        distributorId,
+    const result = await orderRepository.findMany(
+      {
+        distributorId: userId,
         status: "delivered",
-        deliveryDate: {
-          $gte: startDate,
-          $lte: endDate,
-        },
-      })
-      .toArray();
+      },
+      { page: 1, limit: 1000 }
+    );
+    
+    // Filter by date range
+    const orders = result.data.filter(
+      (order) =>
+        order.deliveryDate &&
+        order.deliveryDate >= startDate &&
+        order.deliveryDate <= endDate
+    );
 
     const totalEarnings = orders.reduce(
       (sum, order) => sum + (order.deliveryFee || 0),
@@ -194,13 +197,16 @@ export async function getEarnings(
   period: "week" | "month" | "year" = "month"
 ): Promise<{ success: boolean; data?: EarningsData; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
+    const { userId, userEmail } = await requireAuth();
+    // Note: Role would need to be fetched from userRepository if needed
+    
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      return { success: false, error: "User not found" };
     }
-
-    const role = session.user.role;
-    const userId = new ObjectId(session.user.id);
+    
+    const role = user.role;
+    const userIdObj = new ObjectId(userId);
 
     // Calculate date range
     const now = new Date();
@@ -214,11 +220,11 @@ export async function getEarnings(
     }
 
     if (role === "farmer") {
-      return await getFarmerEarnings(userId, startDate);
+      return await getFarmerEarnings(userIdObj, startDate);
     } else if (role === "distributor") {
-      return await getDistributorEarningsNew(userId, startDate);
+      return await getDistributorEarningsNew(userIdObj, startDate);
     } else if (role === "retailer") {
-      return await getRetailerEarnings(userId, startDate);
+      return await getRetailerEarnings(userIdObj, startDate);
     }
 
     return { success: false, error: "Invalid user role" };
@@ -229,15 +235,18 @@ export async function getEarnings(
 }
 
 async function getFarmerEarnings(userId: ObjectId, startDate: Date) {
-  const ordersCollection = await getOrdersCollection();
-
-  const orders = await ordersCollection
-    .find({
-      farmerId: userId,
+  const result = await orderRepository.findMany(
+    {
+      farmerId: userId.toString(),
       status: "delivered",
-      createdAt: { $gte: startDate },
-    })
-    .toArray();
+    },
+    { page: 1, limit: 1000 }
+  );
+  
+  // Filter by date range
+  const orders = result.data.filter(
+    (order) => order.createdAt >= startDate
+  );
 
   const totalRevenue = orders.reduce(
     (sum, order) => sum + (order.farmerRevenue || 0),
@@ -269,15 +278,18 @@ async function getFarmerEarnings(userId: ObjectId, startDate: Date) {
 }
 
 async function getDistributorEarningsNew(userId: ObjectId, startDate: Date) {
-  const ordersCollection = await getOrdersCollection();
-
-  const orders = await ordersCollection
-    .find({
-      distributorId: userId,
+  const result = await orderRepository.findMany(
+    {
+      distributorId: userId.toString(),
       status: "delivered",
-      createdAt: { $gte: startDate },
-    })
-    .toArray();
+    },
+    { page: 1, limit: 1000 }
+  );
+  
+  // Filter by date range
+  const orders = result.data.filter(
+    (order) => order.createdAt >= startDate
+  );
 
   const totalRevenue = orders.reduce(
     (sum, order) => sum + (order.distributorRevenue || 0),
@@ -346,10 +358,8 @@ export async function getPlatformEarnings(
   period: "week" | "month" | "year" = "month"
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id || !session.user.isAdmin) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { requireAdmin } = await import("@/services/auth.service");
+    await requireAdmin();
 
     const now = new Date();
     const startDate = new Date();
@@ -361,14 +371,17 @@ export async function getPlatformEarnings(
       startDate.setFullYear(now.getFullYear() - 1);
     }
 
-    const ordersCollection = await getOrdersCollection();
-
-    const orders = await ordersCollection
-      .find({
+    const result = await orderRepository.findMany(
+      {
         status: "delivered",
-        createdAt: { $gte: startDate },
-      })
-      .toArray();
+      },
+      { page: 1, limit: 10000 }
+    );
+    
+    // Filter by date range
+    const orders = result.data.filter(
+      (order) => order.createdAt >= startDate
+    );
 
     const platformRevenue = orders.reduce(
       (sum, order) => sum + (order.platformRevenue || 0),

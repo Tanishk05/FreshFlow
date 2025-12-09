@@ -40,29 +40,47 @@ export default function BuyProduce() {
     }
     fetchProduce();
 
-    const socket = getSocket();
-    socket.on(
-      "retailer-marketplace-update",
-      (update: { type: string; produce: MarketplaceProduce }) => {
-        setProduce((prev) => {
-          if (update.type === "add") {
-            if (!prev.some((p) => p._id === update.produce._id)) {
-              return [update.produce, ...prev].slice(0, 5);
-            }
-            return prev;
-          } else if (update.type === "update") {
-            return prev.map((p) =>
-              p._id === update.produce._id ? { ...p, ...update.produce } : p
-            );
-          } else if (update.type === "remove") {
-            return prev.filter((p) => p._id !== update.produce._id);
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted) return;
+
+        socketInstance.on(
+          "retailer-marketplace-update",
+          (update: { type: string; produce: MarketplaceProduce }) => {
+            if (!isMounted) return;
+            setProduce((prev) => {
+              if (update.type === "add") {
+                if (!prev.some((p) => p._id === update.produce._id)) {
+                  return [update.produce, ...prev].slice(0, 5);
+                }
+                return prev;
+              } else if (update.type === "update") {
+                return prev.map((p) =>
+                  p._id === update.produce._id ? { ...p, ...update.produce } : p
+                );
+              } else if (update.type === "remove") {
+                return prev.filter((p) => p._id !== update.produce._id);
+              }
+              return prev;
+            });
           }
-          return prev;
-        });
+        );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
       }
-    );
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("retailer-marketplace-update");
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.off("retailer-marketplace-update");
+      }
     };
   }, []);
 

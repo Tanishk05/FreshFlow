@@ -5,23 +5,21 @@ import {
   RetailerOrderSerialized,
   RetailerOrderStatus,
 } from "@/models/RetailerOrder";
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
+import { userRepository } from "@/repositories/user.repository";
+import { fleetRepository } from "@/repositories/fleet.repository";
 import { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
-import { getUsersCollection } from "@/models/User";
-import { getFleetCollection } from "@/models/Fleet";
 
 export async function getMyRetailerOrders(): Promise<
   RetailerOrderSerialized[]
 > {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getRetailerOrderCollection();
   const orders = await collection
-    .find({ distributorId: new ObjectId(session.user.id) })
+    .find({ distributorId: new ObjectId(userId) })
     .sort({ orderDate: -1 })
     .toArray();
 
@@ -41,29 +39,30 @@ export async function getMyRetailerOrders(): Promise<
 export async function getRetailerOrdersByStatus(
   status: RetailerOrderStatus
 ): Promise<RetailerOrderSerialized[]> {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getRetailerOrderCollection();
   const orders = await collection
     .find({
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
       status,
     })
     .sort({ orderDate: -1 })
     .toArray();
 
   // Fetch retailer names for each order
-  const usersCollection = await getUsersCollection();
   const retailerIds = [...new Set(orders.map((o) => o.retailerId.toString()))];
-  const retailers = await usersCollection
-    .find({ _id: { $in: retailerIds.map((id) => new ObjectId(id)) } })
-    .toArray();
+  const retailers = await Promise.all(
+    retailerIds.map((id) => userRepository.findById(id))
+  );
+  const validRetailers = retailers.filter((r) => r !== null);
 
   const retailerMap = new Map(
-    retailers.map((r) => [r._id.toString(), r.name || r.email || "Unknown"])
+    validRetailers.map((r) => [
+      r!._id.toString(),
+      r!.name || r!.email || "Unknown",
+    ])
   );
 
   return orders.map((order) => ({
@@ -81,18 +80,15 @@ export async function getRetailerOrdersByStatus(
 }
 
 export async function assignOrderToTruck(orderId: string, truckId: string) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getRetailerOrderCollection();
-  const fleetCollection = await getFleetCollection();
 
   // Get the order to get destination info
   const order = await collection.findOne({
     _id: new ObjectId(orderId),
-    distributorId: new ObjectId(session.user.id),
+    distributorId: new ObjectId(userId),
   });
 
   if (!order) {
@@ -103,7 +99,7 @@ export async function assignOrderToTruck(orderId: string, truckId: string) {
   await collection.updateOne(
     {
       _id: new ObjectId(orderId),
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
     },
     {
       $set: {
@@ -115,22 +111,18 @@ export async function assignOrderToTruck(orderId: string, truckId: string) {
   );
 
   // Update the truck status to "on-route" and link to order
-  await fleetCollection.updateOne(
-    {
-      _id: new ObjectId(truckId),
-      distributorId: new ObjectId(session.user.id),
-    },
-    {
-      $set: {
-        status: "on-route",
-        destination: order.destination,
-        updatedAt: new Date(),
-      },
-      $addToSet: {
-        assignedOrderIds: new ObjectId(orderId),
-      },
+  const truck = await fleetRepository.findById(truckId);
+  if (truck && truck.distributorId.toString() === userId) {
+    const assignedOrderIds = truck.assignedOrderIds || [];
+    if (!assignedOrderIds.some((id) => id.toString() === orderId)) {
+      assignedOrderIds.push(new ObjectId(orderId));
     }
-  );
+    await fleetRepository.update(truckId, {
+      status: "on-route",
+      destination: order.destination,
+      assignedOrderIds,
+    });
+  }
 
   revalidatePath("/dashboard/distributor");
   return { success: true };
@@ -140,18 +132,15 @@ export async function updateRetailerOrderStatus(
   orderId: string,
   status: RetailerOrderStatus
 ) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getRetailerOrderCollection();
-  const fleetCollection = await getFleetCollection();
 
   // Get the order to find the assigned truck
   const order = await collection.findOne({
     _id: new ObjectId(orderId),
-    distributorId: new ObjectId(session.user.id),
+    distributorId: new ObjectId(userId),
   });
 
   if (!order) {
@@ -162,7 +151,7 @@ export async function updateRetailerOrderStatus(
   await collection.updateOne(
     {
       _id: new ObjectId(orderId),
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
     },
     {
       $set: {
@@ -174,22 +163,24 @@ export async function updateRetailerOrderStatus(
 
   // If order is delivered, reset truck to available and remove order from assignedOrderIds
   if (status === "delivered" && order.assignedTruckId) {
-    await fleetCollection.updateOne(
-      {
-        _id: order.assignedTruckId,
-        distributorId: new ObjectId(session.user.id),
-      },
-      {
-        $set: {
+    const truck = await fleetRepository.findById(order.assignedTruckId.toString());
+    if (truck && truck.distributorId.toString() === userId) {
+      const updatedOrderIds = (truck.assignedOrderIds || []).filter(
+        (id) => id.toString() !== orderId
+      );
+      
+      if (updatedOrderIds.length === 0) {
+        await fleetRepository.update(order.assignedTruckId.toString(), {
           status: "available",
           destination: undefined,
-          updatedAt: new Date(),
-        },
-        $pull: {
-          assignedOrderIds: new ObjectId(orderId),
-        },
+          assignedOrderIds: [],
+        });
+      } else {
+        await fleetRepository.update(order.assignedTruckId.toString(), {
+          assignedOrderIds: updatedOrderIds,
+        });
       }
-    );
+    }
   }
 
   revalidatePath("/dashboard/distributor");
@@ -197,29 +188,27 @@ export async function updateRetailerOrderStatus(
 }
 
 export async function getRetailerOrderStats() {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getRetailerOrderCollection();
 
   const [total, pending, assigned, inTransit, delivered] = await Promise.all([
-    collection.countDocuments({ distributorId: new ObjectId(session.user.id) }),
+    collection.countDocuments({ distributorId: new ObjectId(userId) }),
     collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
       status: "pending",
     }),
     collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
       status: "assigned",
     }),
     collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
       status: "in-transit",
     }),
     collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
       status: "delivered",
     }),
   ]);

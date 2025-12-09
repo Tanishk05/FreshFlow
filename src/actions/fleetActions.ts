@@ -1,82 +1,42 @@
 "use server";
 
 import {
-  getFleetCollection,
   Fleet,
   FleetSerialized,
   TruckStatus,
 } from "@/models/Fleet";
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
+import { fleetRepository } from "@/repositories/fleet.repository";
+import { serializeFleetArray } from "@/lib/serialization";
 import { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
 
 export async function getMyFleet(): Promise<FleetSerialized[]> {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
-  const collection = await getFleetCollection();
-  const trucks = await collection
-    .find({ distributorId: new ObjectId(session.user.id) })
-    .sort({ truckNumber: 1 })
-    .toArray();
+  const trucks = await fleetRepository.findByDistributorId(userId);
+  
+  // Sort by truck number
+  trucks.sort((a, b) => a.truckNumber.localeCompare(b.truckNumber));
 
-  return trucks.map((truck) => {
-    // Destructure to exclude assignedOrderId (old field that may exist in DB)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { assignedOrderId, ...truckData } = truck as Fleet & {
-      assignedOrderId?: ObjectId;
-    };
-    return {
-      ...truckData,
-      _id: truck._id?.toString(),
-      distributorId: truck.distributorId.toString(),
-      assignedOrderIds:
-        truck.assignedOrderIds
-          ?.filter((id) => id !== null)
-          .map((id) => id.toString()) || [],
-      availableCapacityKg: truck.capacityKg - truck.currentLoadKg,
-      loadPercentage: (truck.currentLoadKg / truck.capacityKg) * 100,
-    };
-  });
+  return serializeFleetArray(trucks);
 }
 
 export async function getTrucksByStatus(
   status: TruckStatus
 ): Promise<FleetSerialized[]> {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
 
-  const collection = await getFleetCollection();
-  const trucks = await collection
-    .find({
-      distributorId: new ObjectId(session.user.id),
-      status,
-    })
-    .sort({ truckNumber: 1 })
-    .toArray();
-
-  return trucks.map((truck) => {
-    // Destructure to exclude assignedOrderId (old field that may exist in DB)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { assignedOrderId, ...truckData } = truck as Fleet & {
-      assignedOrderId?: ObjectId;
-    };
-    return {
-      ...truckData,
-      _id: truck._id?.toString(),
-      distributorId: truck.distributorId.toString(),
-      assignedOrderIds:
-        truck.assignedOrderIds
-          ?.filter((id) => id !== null)
-          .map((id) => id.toString()) || [],
-      availableCapacityKg: truck.capacityKg - truck.currentLoadKg,
-      loadPercentage: (truck.currentLoadKg / truck.capacityKg) * 100,
-    };
+  const trucks = await fleetRepository.findMany({
+    distributorId: userId,
+    status,
   });
+  
+  // Sort by truck number
+  trucks.sort((a, b) => a.truckNumber.localeCompare(b.truckNumber));
+
+  return serializeFleetArray(trucks);
 }
 
 export async function addTruck(data: {
@@ -85,15 +45,10 @@ export async function addTruck(data: {
   driverContact: string;
   capacityKg: number;
 }) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
 
-  const collection = await getFleetCollection();
-
-  const newTruck: Fleet = {
-    distributorId: new ObjectId(session.user.id),
+  const newTruck: Omit<Fleet, "_id"> = {
+    distributorId: new ObjectId(userId),
     truckNumber: data.truckNumber,
     driver: data.driver,
     driverContact: data.driverContact,
@@ -104,7 +59,7 @@ export async function addTruck(data: {
     updatedAt: new Date(),
   };
 
-  const result = await collection.insertOne(newTruck);
+  const result = await fleetRepository.create(newTruck);
 
   revalidatePath("/dashboard/distributor");
   return { success: true, id: result.insertedId.toString() };
@@ -118,16 +73,16 @@ export async function updateTruckStatus(
   eta?: Date,
   temperatureC?: number
 ) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
 
-  const collection = await getFleetCollection();
+  // Verify ownership
+  const truck = await fleetRepository.findById(truckId);
+  if (!truck || truck.distributorId.toString() !== userId) {
+    throw new Error("Unauthorized: Truck not found or access denied");
+  }
 
   const updateData: Partial<Fleet> = {
     status,
-    updatedAt: new Date(),
   };
 
   if (location) updateData.currentLocation = location;
@@ -135,74 +90,48 @@ export async function updateTruckStatus(
   if (eta) updateData.eta = eta;
   if (temperatureC !== undefined) updateData.temperatureC = temperatureC;
 
-  await collection.updateOne(
-    {
-      _id: new ObjectId(truckId),
-      distributorId: new ObjectId(session.user.id),
-    },
-    { $set: updateData }
-  );
+  await fleetRepository.update(truckId, updateData);
 
   revalidatePath("/dashboard/distributor");
   return { success: true };
 }
 
 export async function assignTruckToOrder(truckId: string, orderId: string) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
+  const { userId } = await requireAuth();
+
+  // Verify ownership
+  const truck = await fleetRepository.findById(truckId);
+  if (!truck || truck.distributorId.toString() !== userId) {
+    throw new Error("Unauthorized: Truck not found or access denied");
   }
 
-  const collection = await getFleetCollection();
+  // Add order to assignedOrderIds if not already present
+  const orderObjectId = new ObjectId(orderId);
+  const assignedOrderIds = truck.assignedOrderIds || [];
+  if (!assignedOrderIds.some(id => id.toString() === orderId)) {
+    assignedOrderIds.push(orderObjectId);
+  }
 
-  await collection.updateOne(
-    {
-      _id: new ObjectId(truckId),
-      distributorId: new ObjectId(session.user.id),
-    },
-    {
-      $set: {
-        status: "on-route",
-        updatedAt: new Date(),
-      },
-      $addToSet: {
-        assignedOrderIds: new ObjectId(orderId),
-      },
-    }
-  );
+  await fleetRepository.update(truckId, {
+    status: "on-route",
+    assignedOrderIds,
+  });
 
   revalidatePath("/dashboard/distributor");
   return { success: true };
 }
 
 export async function getFleetStats() {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
 
-  const collection = await getFleetCollection();
+  const trucks = await fleetRepository.findByDistributorId(userId);
 
-  const [total, available, onRoute, maintenance] = await Promise.all([
-    collection.countDocuments({ distributorId: new ObjectId(session.user.id) }),
-    collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
-      status: "available",
-    }),
-    collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
-      status: "on-route",
-    }),
-    collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
-      status: "maintenance",
-    }),
-  ]);
-
-  return {
-    total,
-    available,
-    onRoute,
-    maintenance,
+  const stats = {
+    total: trucks.length,
+    available: trucks.filter(t => t.status === "available").length,
+    onRoute: trucks.filter(t => t.status === "on-route").length,
+    maintenance: trucks.filter(t => t.status === "maintenance").length,
   };
+
+  return stats;
 }

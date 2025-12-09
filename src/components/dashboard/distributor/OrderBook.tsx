@@ -61,32 +61,52 @@ export default function OrderBook({ minPayout }: OrderBookProps) {
     fetchOrders();
     fetchTrucks();
     // WebSocket: Listen for new/updated orders in real time
-    const socket = getSocket();
-    socket.on(
-      "order-book-update",
-      (update: { type: string; order: OrderWithDetails }) => {
-        setJobs((prev) => {
-          if (update.type === "add") {
-            // Add new order if not present
-            if (!prev.some((job) => job._id === update.order._id)) {
-              return [update.order, ...prev];
-            }
-            return prev;
-          } else if (update.type === "update") {
-            // Update order if present
-            return prev.map((job) =>
-              job._id === update.order._id ? { ...job, ...update.order } : job
-            );
-          } else if (update.type === "remove") {
-            // Remove order if present
-            return prev.filter((job) => job._id !== update.order._id);
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted) return;
+
+        socketInstance.on(
+          "order-book-update",
+          (update: { type: string; order: OrderWithDetails }) => {
+            if (!isMounted) return;
+            setJobs((prev) => {
+              if (update.type === "add") {
+                // Add new order if not present
+                if (!prev.some((job) => job._id === update.order._id)) {
+                  return [update.order, ...prev];
+                }
+                return prev;
+              } else if (update.type === "update") {
+                // Update order if present
+                return prev.map((job) =>
+                  job._id === update.order._id
+                    ? { ...job, ...update.order }
+                    : job
+                );
+              } else if (update.type === "remove") {
+                // Remove order if present
+                return prev.filter((job) => job._id !== update.order._id);
+              }
+              return prev;
+            });
           }
-          return prev;
-        });
+        );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
       }
-    );
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("order-book-update");
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.off("order-book-update");
+      }
     };
   }, []);
 

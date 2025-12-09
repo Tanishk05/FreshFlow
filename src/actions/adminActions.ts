@@ -1,50 +1,21 @@
 "use server";
 
-import { auth } from "@/auth";
-import { getUsersCollection, type User, type UserSerialized } from "@/models/User";
-import { ObjectId } from "mongodb";
+import type { UserSerialized } from "@/models/User";
+import type { UserRole } from "@/models/User";
+import { userRepository } from "@/repositories/user.repository";
+import { serializeUsers, serializeUser } from "@/lib/serialization";
+import { requireAdmin, isAdmin as checkIsAdmin } from "@/services/auth.service";
+import { PaginationConfig } from "@/lib/config";
 
-// Check if user is admin
+// Re-export isAdmin for backward compatibility (must be async in "use server" files)
 export async function isAdmin(): Promise<boolean> {
-  const session = await auth();
-  if (!session?.user?.id) return false;
-
-  // First, check if isAdmin is set in the session (from token)
-  if (session.user.isAdmin === true) {
-    return true;
-  }
-
-  // Fallback: Check the database directly to ensure we have the latest value
-  // This handles cases where isAdmin was changed but session hasn't refreshed
-  try {
-    const usersCollection = await getUsersCollection();
-    const user = await usersCollection.findOne({
-      _id: new ObjectId(session.user.id),
-    });
-
-    if (user?.isAdmin === true) {
-      return true;
-    }
-  } catch (error) {
-    console.error("Error checking admin status:", error);
-  }
-
-  // Legacy: Also check against hardcoded admin emails as fallback
-  // This ensures existing admins still work
-  if (session.user.email) {
-    const adminEmails = ["tanishkshrivastava6@gmail.com", "admin@freshflow.com"];
-    if (adminEmails.includes(session.user.email)) {
-      return true;
-    }
-  }
-
-  return false;
+  return checkIsAdmin();
 }
 
 // Get all users with pagination
 export async function getAllUsers(
-  page: number = 1,
-  limit: number = 20,
+  page: number = PaginationConfig.defaultPage,
+  limit: number = PaginationConfig.defaultLimit,
   search?: string,
   role?: string
 ): Promise<{
@@ -53,64 +24,21 @@ export async function getAllUsers(
   pages: number;
   currentPage: number;
 }> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    throw new Error("Unauthorized: Admin access required");
-  }
+  // Check admin access
+  await requireAdmin();
 
-  const usersCollection = await getUsersCollection();
+  // Use repository to fetch users
+  const result = await userRepository.findMany(
+    { search, role: role as UserRole | "all" },
+    { page, limit }
+  );
 
-  // Build query
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const query: any = {};
-  if (search) {
-    query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
-      { username: { $regex: search, $options: "i" } },
-    ];
-  }
-  if (role && role !== "all") {
-    query.role = role;
-  }
-
-  const total = await usersCollection.countDocuments(query);
-  const pages = Math.ceil(total / limit);
-  const skip = (page - 1) * limit;
-
-  const users = await usersCollection
-    .find(query)
-    .sort({ _id: -1 })
-    .skip(skip)
-    .limit(limit)
-    .toArray();
-
-  // Serialize users for client components: convert ObjectId to string and Date to ISO string
-  const serializedUsers = users.map((user) => ({
-    ...user,
-    _id: user._id.toString(),
-    emailVerified: user.emailVerified
-      ? user.emailVerified instanceof Date
-        ? user.emailVerified.toISOString()
-        : user.emailVerified
-      : null,
-    verifyTokenExpires: user.verifyTokenExpires
-      ? user.verifyTokenExpires instanceof Date
-        ? user.verifyTokenExpires.toISOString()
-        : user.verifyTokenExpires
-      : null,
-    bannedAt: user.bannedAt
-      ? user.bannedAt instanceof Date
-        ? user.bannedAt.toISOString()
-        : user.bannedAt
-      : null,
-  }));
-
+  // Serialize users for client components
   return {
-    users: serializedUsers,
-    total,
-    pages,
-    currentPage: page,
+    users: serializeUsers(result.data),
+    total: result.total,
+    pages: result.pages,
+    currentPage: result.currentPage,
   };
 }
 
@@ -123,22 +51,17 @@ export async function getUserStats(): Promise<{
   verified: number;
   withOrders: number;
 }> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    throw new Error("Unauthorized: Admin access required");
-  }
+  // Check admin access
+  await requireAdmin();
 
-  const usersCollection = await getUsersCollection();
-
-  const [total, farmers, distributors, retailers, verified] = await Promise.all(
-    [
-      usersCollection.countDocuments(),
-      usersCollection.countDocuments({ role: "farmer" }),
-      usersCollection.countDocuments({ role: "distributor" }),
-      usersCollection.countDocuments({ role: "retailer" }),
-      usersCollection.countDocuments({ emailVerified: { $exists: true } }),
-    ]
-  );
+  // Use repository to fetch statistics
+  const [total, farmers, distributors, retailers, verified] = await Promise.all([
+    userRepository.countAll(),
+    userRepository.countByRole("farmer"),
+    userRepository.countByRole("distributor"),
+    userRepository.countByRole("retailer"),
+    userRepository.countVerified(),
+  ]);
 
   return {
     total,
@@ -155,24 +78,22 @@ export async function updateUserRole(
   userId: string,
   newRole: "farmer" | "distributor" | "retailer"
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    return { success: false, message: "Unauthorized: Admin access required" };
-  }
-
   try {
-    const usersCollection = await getUsersCollection();
-    const result = await usersCollection.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { role: newRole } }
-    );
+    // Check admin access
+    await requireAdmin();
 
-    if (result.modifiedCount > 0) {
+    // Use repository to update role
+    const result = await userRepository.updateRole(userId, newRole);
+
+    if (result.success) {
       return { success: true, message: `User role updated to ${newRole}` };
     } else {
       return { success: false, message: "User not found or role unchanged" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error updating user role:", error);
     return { success: false, message: "Failed to update user role" };
   }
@@ -182,23 +103,22 @@ export async function updateUserRole(
 export async function deleteUser(
   userId: string
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    return { success: false, message: "Unauthorized: Admin access required" };
-  }
-
   try {
-    const usersCollection = await getUsersCollection();
-    const result = await usersCollection.deleteOne({
-      _id: new ObjectId(userId),
-    });
+    // Check admin access
+    await requireAdmin();
 
-    if (result.deletedCount > 0) {
+    // Use repository to delete user
+    const result = await userRepository.delete(userId);
+
+    if (result.success) {
       return { success: true, message: "User deleted successfully" };
     } else {
       return { success: false, message: "User not found" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error deleting user:", error);
     return { success: false, message: "Failed to delete user" };
   }
@@ -208,24 +128,22 @@ export async function deleteUser(
 export async function verifyUserEmail(
   userId: string
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    return { success: false, message: "Unauthorized: Admin access required" };
-  }
-
   try {
-    const usersCollection = await getUsersCollection();
-    const result = await usersCollection.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { emailVerified: new Date() } }
-    );
+    // Check admin access
+    await requireAdmin();
 
-    if (result.modifiedCount > 0) {
+    // Use repository to verify email
+    const result = await userRepository.verifyEmail(userId);
+
+    if (result.success) {
       return { success: true, message: "User email verified" };
     } else {
       return { success: false, message: "User not found" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error verifying email:", error);
     return { success: false, message: "Failed to verify email" };
   }
@@ -233,38 +151,18 @@ export async function verifyUserEmail(
 
 // Get user details
 export async function getUserDetails(userId: string): Promise<UserSerialized | null> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    throw new Error("Unauthorized: Admin access required");
-  }
+  // Check admin access
+  await requireAdmin();
 
-  const usersCollection = await getUsersCollection();
-  const user = await usersCollection.findOne({ _id: new ObjectId(userId) });
+  // Use repository to fetch user
+  const user = await userRepository.findById(userId);
 
   if (!user) {
     return null;
   }
 
-  // Serialize user for client components: convert ObjectId to string and Date to ISO string
-  return {
-    ...user,
-    _id: user._id.toString(),
-    emailVerified: user.emailVerified
-      ? user.emailVerified instanceof Date
-        ? user.emailVerified.toISOString()
-        : user.emailVerified
-      : null,
-    verifyTokenExpires: user.verifyTokenExpires
-      ? user.verifyTokenExpires instanceof Date
-        ? user.verifyTokenExpires.toISOString()
-        : user.verifyTokenExpires
-      : null,
-    bannedAt: user.bannedAt
-      ? user.bannedAt instanceof Date
-        ? user.bannedAt.toISOString()
-        : user.bannedAt
-      : null,
-  };
+  // Serialize user for client components
+  return serializeUser(user);
 }
 
 // Ban/Unban user
@@ -272,19 +170,14 @@ export async function toggleUserBan(
   userId: string,
   banned: boolean
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    return { success: false, message: "Unauthorized: Admin access required" };
-  }
-
   try {
-    const usersCollection = await getUsersCollection();
-    const result = await usersCollection.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { banned, bannedAt: banned ? new Date() : null } }
-    );
+    // Check admin access
+    await requireAdmin();
 
-    if (result.modifiedCount > 0) {
+    // Use repository to toggle ban
+    const result = await userRepository.toggleBan(userId, banned);
+
+    if (result.success) {
       return {
         success: true,
         message: banned
@@ -295,6 +188,9 @@ export async function toggleUserBan(
       return { success: false, message: "User not found" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error toggling user ban:", error);
     return { success: false, message: "Failed to update user status" };
   }
@@ -305,19 +201,14 @@ export async function toggleUserAdmin(
   userId: string,
   makeAdmin: boolean
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user || !(await isAdmin())) {
-    return { success: false, message: "Unauthorized: Admin access required" };
-  }
-
   try {
-    const usersCollection = await getUsersCollection();
-    const result = await usersCollection.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { isAdmin: makeAdmin } }
-    );
+    // Check admin access
+    await requireAdmin();
 
-    if (result.modifiedCount > 0) {
+    // Use repository to toggle admin
+    const result = await userRepository.toggleAdmin(userId, makeAdmin);
+
+    if (result.success) {
       return {
         success: true,
         message: makeAdmin
@@ -328,6 +219,9 @@ export async function toggleUserAdmin(
       return { success: false, message: "User not found" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error toggling admin status:", error);
     return { success: false, message: "Failed to update admin status" };
   }

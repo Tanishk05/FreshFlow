@@ -1,7 +1,7 @@
 "use server";
 
-import { getProduceCollection } from "@/models/Produce";
-import { getUsersCollection } from "@/models/User";
+import { produceRepository } from "@/repositories/produce.repository";
+import { userRepository } from "@/repositories/user.repository";
 import { ObjectId } from "mongodb";
 
 export interface MarketplaceProduce {
@@ -27,32 +27,30 @@ export interface MarketplaceProduce {
  */
 export async function getMarketplaceProduce(): Promise<MarketplaceProduce[]> {
   try {
-    const produceCollection = await getProduceCollection();
-    const usersCollection = await getUsersCollection();
-
     // Find all produce that is visible and available
-    const produceItems = await produceCollection
-      .find({
-        isVisible: true,
-        isAvailable: true,
-      })
-      .sort({ createdAt: -1 })
-      .toArray();
+    const produceItems = await produceRepository.findMany({
+      isVisible: true,
+      isAvailable: true,
+    });
+
+    // Sort by createdAt descending
+    produceItems.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     // Get unique farmer IDs
-    const farmerIds = [...new Set(produceItems.map((p) => p.userId))];
+    const farmerIds = [...new Set(produceItems.map((p) => p.userId.toString()))];
 
     // Fetch farmer details
-    const farmers = await usersCollection
-      .find({
-        _id: { $in: farmerIds },
-        role: "farmer",
-      })
-      .toArray();
+    const farmers = await Promise.all(
+      farmerIds.map((id) => userRepository.findById(id))
+    );
+    const validFarmers = farmers.filter((f) => f !== null && f.role === "farmer");
 
     // Create a map of farmer details
     const farmerMap = new Map(
-      farmers.map((f) => [f._id.toString(), { name: f.name, email: f.email }])
+      validFarmers.map((f) => [
+        f!._id.toString(),
+        { name: f!.name, email: f!.email },
+      ])
     );
 
     // Combine produce with farmer details
@@ -90,22 +88,16 @@ export async function getProduceByFarmer(
   farmerId: string
 ): Promise<MarketplaceProduce[]> {
   try {
-    const produceCollection = await getProduceCollection();
-    const usersCollection = await getUsersCollection();
-
-    const produceItems = await produceCollection
-      .find({
-        userId: new ObjectId(farmerId),
-        isVisible: true,
-        isAvailable: true,
-      })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    const farmer = await usersCollection.findOne({
-      _id: new ObjectId(farmerId),
-      role: "farmer",
+    const produceItems = await produceRepository.findMany({
+      userId: farmerId,
+      isVisible: true,
+      isAvailable: true,
     });
+
+    // Sort by createdAt descending
+    produceItems.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const farmer = await userRepository.findById(farmerId);
 
     const marketplaceProduce: MarketplaceProduce[] = produceItems.map((p) => ({
       _id: p._id!.toString(),
@@ -138,31 +130,34 @@ export async function searchMarketplaceProduce(
   query: string
 ): Promise<MarketplaceProduce[]> {
   try {
-    const produceCollection = await getProduceCollection();
-    const usersCollection = await getUsersCollection();
-
     const searchRegex = new RegExp(query, "i");
 
-    const produceItems = await produceCollection
-      .find({
-        isVisible: true,
-        isAvailable: true,
-        $or: [{ name: searchRegex }, { category: searchRegex }],
-      })
-      .sort({ createdAt: -1 })
-      .toArray();
+    // Get all visible and available produce
+    const allProduce = await produceRepository.findMany({
+      isVisible: true,
+      isAvailable: true,
+    });
 
-    const farmerIds = [...new Set(produceItems.map((p) => p.userId))];
+    // Filter by search query
+    const produceItems = allProduce.filter(
+      (p) => searchRegex.test(p.name) || searchRegex.test(p.category)
+    );
 
-    const farmers = await usersCollection
-      .find({
-        _id: { $in: farmerIds },
-        role: "farmer",
-      })
-      .toArray();
+    // Sort by createdAt descending
+    produceItems.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const farmerIds = [...new Set(produceItems.map((p) => p.userId.toString()))];
+
+    const farmers = await Promise.all(
+      farmerIds.map((id) => userRepository.findById(id))
+    );
+    const validFarmers = farmers.filter((f) => f !== null && f.role === "farmer");
 
     const farmerMap = new Map(
-      farmers.map((f) => [f._id.toString(), { name: f.name, email: f.email }])
+      validFarmers.map((f) => [
+        f!._id.toString(),
+        { name: f!.name, email: f!.email },
+      ])
     );
 
     const marketplaceProduce: MarketplaceProduce[] = produceItems.map((p) => {

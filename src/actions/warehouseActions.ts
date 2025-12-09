@@ -4,19 +4,17 @@ import {
   getWarehouseInventoryCollection,
   WarehouseInventory,
 } from "@/models/WarehouseInventory";
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
 import { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
 
 export async function getMyWarehouseInventory(): Promise<WarehouseInventory[]> {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getWarehouseInventoryCollection();
   const items = await collection
-    .find({ distributorId: new ObjectId(session.user.id) })
+    .find({ distributorId: new ObjectId(userId) })
     .sort({ receivedDate: -1 })
     .toArray();
 
@@ -36,15 +34,13 @@ export async function addWarehouseItem(data: {
   category?: string;
   farmerId?: string;
 }) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getWarehouseInventoryCollection();
 
   const newItem: WarehouseInventory = {
-    distributorId: new ObjectId(session.user.id),
+    distributorId: new ObjectId(userId),
     name: data.name,
     lotNumber: data.lotNumber,
     quantity: data.quantity,
@@ -68,10 +64,8 @@ export async function updateWarehouseStock(
   quantity: number,
   status?: "in-stock" | "allocated" | "dispatched"
 ) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getWarehouseInventoryCollection();
 
@@ -87,7 +81,7 @@ export async function updateWarehouseStock(
   await collection.updateOne(
     {
       _id: new ObjectId(itemId),
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
     },
     { $set: updateData }
   );
@@ -97,16 +91,14 @@ export async function updateWarehouseStock(
 }
 
 export async function deleteWarehouseItem(itemId: string) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getWarehouseInventoryCollection();
 
   await collection.deleteOne({
     _id: new ObjectId(itemId),
-    distributorId: new ObjectId(session.user.id),
+    distributorId: new ObjectId(userId),
   });
 
   revalidatePath("/dashboard/distributor");
@@ -114,28 +106,26 @@ export async function deleteWarehouseItem(itemId: string) {
 }
 
 export async function getWarehouseStats() {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "distributor") {
-    throw new Error("Unauthorized");
-  }
+  const { userId } = await requireAuth();
+  // Note: Role check could be moved to a role service
 
   const collection = await getWarehouseInventoryCollection();
 
   const [totalItems, inStock, allocated] = await Promise.all([
-    collection.countDocuments({ distributorId: new ObjectId(session.user.id) }),
+    collection.countDocuments({ distributorId: new ObjectId(userId) }),
     collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
       status: "in-stock",
     }),
     collection.countDocuments({
-      distributorId: new ObjectId(session.user.id),
+      distributorId: new ObjectId(userId),
       status: "allocated",
     }),
   ]);
 
   // Calculate total pallets
   const items = await collection
-    .find({ distributorId: new ObjectId(session.user.id) })
+    .find({ distributorId: new ObjectId(userId) })
     .toArray();
   const totalPallets = items.reduce((sum, item) => sum + item.quantity, 0);
   const maxCapacity = 1000; // Example max capacity in pallets

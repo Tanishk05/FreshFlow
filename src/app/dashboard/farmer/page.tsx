@@ -125,83 +125,48 @@ export default function FarmerDashboard() {
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  // Fetch produce data
+  // Fetch all data in parallel for faster load times
   useEffect(() => {
-    const fetchProduce = async () => {
-      setProduceLoading(true);
-      const result = await getMyProduce();
-      if (result.success && result.data) {
-        setProduce(result.data as Produce[]);
-      }
-      setProduceLoading(false);
-    };
-
-    fetchProduce();
-  }, []);
-
-  // Fetch alerts data
-  useEffect(() => {
-    const fetchAlerts = async () => {
+    const fetchAllData = async () => {
       try {
-        setIsLoadingAlerts(true);
-        const alertsData = await getMyAlerts();
-        setAlerts(alertsData);
-      } catch (error) {
-        console.error("Error fetching alerts:", error);
-      } finally {
-        setIsLoadingAlerts(false);
-      }
-    };
-
-    fetchAlerts();
-  }, []);
-
-  // Fetch orders data
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
+        // Set all loading states
         setIsLoadingOrders(true);
-        const result = await getOrdersByStatus("pending");
-        if (result.success && result.data) {
-          setOrders(result.data as OrderFromDB[]);
-        }
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-      } finally {
-        setIsLoadingOrders(false);
-      }
-    };
-
-    fetchOrders();
-  }, []);
-
-  // Fetch shipments data
-  useEffect(() => {
-    const fetchShipments = async () => {
-      try {
         setIsLoadingShipments(true);
-        const result = await getMyShipments();
-        if (result.success && result.data) {
-          setShipments(result.data as ShipmentFromDB[]);
-        }
-      } catch (error) {
-        console.error("Error fetching shipments:", error);
-      } finally {
-        setIsLoadingShipments(false);
-      }
-    };
-
-    fetchShipments();
-  }, []);
-
-  // Fetch tracked orders (approved and completed)
-  useEffect(() => {
-    const fetchTrackedOrders = async () => {
-      try {
         setIsLoadingTrackedOrders(true);
-        const result = await getMyOrders();
-        if (result.success && result.data) {
-          const allOrders = result.data as OrderFromDB[];
+        setIsLoadingPerformance(true);
+        setIsLoadingAlerts(true);
+        setProduceLoading(true);
+
+        // Fetch all data in parallel
+        const [
+          produceResult,
+          alertsData,
+          ordersResult,
+          shipmentsResult,
+          trackedOrdersResult,
+          performanceResult,
+        ] = await Promise.all([
+          getMyProduce(),
+          getMyAlerts(),
+          getOrdersByStatus("pending"),
+          getMyShipments(),
+          getMyOrders(),
+          getFarmerPerformanceMetrics(),
+        ]);
+
+        // Update all states
+        if (produceResult.success && produceResult.data) {
+          setProduce(produceResult.data as Produce[]);
+        }
+        setAlerts(alertsData);
+        if (ordersResult.success && "data" in ordersResult) {
+          setOrders(ordersResult.data as OrderFromDB[]);
+        }
+        if (shipmentsResult.success && shipmentsResult.data) {
+          setShipments(shipmentsResult.data as ShipmentFromDB[]);
+        }
+        if (trackedOrdersResult.success && "data" in trackedOrdersResult) {
+          const allOrders = trackedOrdersResult.data as OrderFromDB[];
           // Filter to show approved, assigned, picked-up, in-transit, and delivered orders
           const tracked = allOrders.filter(
             (o) =>
@@ -213,33 +178,23 @@ export default function FarmerDashboard() {
           );
           setTrackedOrders(tracked);
         }
-      } catch (error) {
-        console.error("Error fetching tracked orders:", error);
-      } finally {
-        setIsLoadingTrackedOrders(false);
-      }
-    };
-
-    fetchTrackedOrders();
-  }, []);
-
-  // Fetch performance metrics
-  useEffect(() => {
-    const fetchPerformanceMetrics = async () => {
-      try {
-        setIsLoadingPerformance(true);
-        const result = await getFarmerPerformanceMetrics();
-        if (result.success && result.data) {
-          setPerformanceMetrics(result.data);
+        if (performanceResult.success && performanceResult.data) {
+          setPerformanceMetrics(performanceResult.data);
         }
       } catch (error) {
-        console.error("Error fetching performance metrics:", error);
+        console.error("Error fetching dashboard data:", error);
       } finally {
+        // Clear all loading states
+        setIsLoadingOrders(false);
+        setIsLoadingShipments(false);
+        setIsLoadingTrackedOrders(false);
         setIsLoadingPerformance(false);
+        setIsLoadingAlerts(false);
+        setProduceLoading(false);
       }
     };
 
-    fetchPerformanceMetrics();
+    fetchAllData();
   }, []);
 
   // --- MEMOS (Derived Data) ---

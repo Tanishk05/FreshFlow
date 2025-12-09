@@ -49,27 +49,52 @@ const StoreInventory: React.FC<Props> = ({ inventory, onMarkSpoiled }) => {
   }, [inventory]);
 
   useEffect(() => {
-    const socket = getSocket();
-    socket.on("retailer-inventory-update", (update: { type: string; item: StoreItem }) => {
-      setLiveInventory((prev: StoreItem[]) => {
-        if (update.type === "add") {
-          if (!prev.some((i: StoreItem) => i._id === update.item._id)) {
-            return [update.item, ...prev];
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted) return;
+
+        socketInstance.on(
+          "retailer-inventory-update",
+          (update: { type: string; item: StoreItem }) => {
+            if (!isMounted) return;
+            setLiveInventory((prev: StoreItem[]) => {
+              if (update.type === "add") {
+                if (!prev.some((i: StoreItem) => i._id === update.item._id)) {
+                  return [update.item, ...prev];
+                }
+                return prev;
+              } else if (update.type === "update") {
+                return prev.map((i: StoreItem) =>
+                  i._id === update.item._id ? { ...i, ...update.item } : i
+                );
+              } else if (update.type === "remove") {
+                return prev.filter((i: StoreItem) => i._id !== update.item._id);
+              }
+              return prev;
+            });
           }
-          return prev;
-        } else if (update.type === "update") {
-          return prev.map((i: StoreItem) => (i._id === update.item._id ? { ...i, ...update.item } : i));
-        } else if (update.type === "remove") {
-          return prev.filter((i: StoreItem) => i._id !== update.item._id);
-        }
-        return prev;
-      });
-    });
+        );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
+      }
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("retailer-inventory-update");
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.off("retailer-inventory-update");
+      }
     };
   }, []);
-  const activeInventory = liveInventory.filter((item: StoreItem) => item.status !== "spoiled");
+  const activeInventory = liveInventory.filter(
+    (item: StoreItem) => item.status !== "spoiled"
+  );
 
   return (
     <ModernCard

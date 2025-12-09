@@ -1,6 +1,7 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
+import { userRepository } from "@/repositories/user.repository";
 import { sendAlertEmail, verifyEmailConfig } from "@/lib/email";
 import type { Alert } from "./alertActions";
 
@@ -9,15 +10,13 @@ export async function sendTestAlertEmail(): Promise<{
   success: boolean;
   message: string;
 }> {
-  const session = await auth();
-
-  if (!session?.user) {
-    return { success: false, message: "Not authenticated" };
-  }
-
-  if (!session.user.email) {
-    return { success: false, message: "User email not found" };
-  }
+  try {
+    const { userId } = await requireAuth();
+    
+    const user = await userRepository.findById(userId);
+    if (!user || !user.email) {
+      return { success: false, message: "User email not found" };
+    }
 
   // Create sample test alerts
   const testAlerts: Alert[] = [
@@ -47,24 +46,30 @@ export async function sendTestAlertEmail(): Promise<{
     },
   ];
 
-  const sent = await sendAlertEmail(
-    session.user.email,
-    session.user.name || "User",
-    session.user.role || "farmer",
-    testAlerts
-  );
+    const sent = await sendAlertEmail(
+      user.email,
+      user.name || "User",
+      user.role || "farmer",
+      testAlerts
+    );
 
-  if (sent) {
-    return {
-      success: true,
-      message: `Test email sent successfully to ${session.user.email}`,
-    };
-  } else {
-    return {
-      success: false,
-      message:
-        "Failed to send test email. Check your email configuration in .env.local",
-    };
+    if (sent) {
+      return {
+        success: true,
+        message: `Test email sent successfully to ${user.email}`,
+      };
+    } else {
+      return {
+        success: false,
+        message:
+          "Failed to send test email. Check your email configuration in .env.local",
+      };
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: "Not authenticated" };
+    }
+    return { success: false, message: "Failed to send test email" };
   }
 }
 
@@ -74,9 +79,9 @@ export async function checkEmailConfig(): Promise<{
   verified: boolean;
   message: string;
 }> {
-  const session = await auth();
-
-  if (!session?.user) {
+  try {
+    await requireAuth();
+  } catch (error) {
     return {
       configured: false,
       verified: false,
@@ -123,9 +128,9 @@ export async function getEmailSettings(): Promise<{
   user?: string;
   port?: string;
 }> {
-  const session = await auth();
-
-  if (!session?.user) {
+  try {
+    await requireAuth();
+  } catch (error) {
     return { configured: false };
   }
 

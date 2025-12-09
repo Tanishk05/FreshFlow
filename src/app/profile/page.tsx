@@ -24,16 +24,10 @@ import SubscriptionPlansComponent from "@/components/dashboard/SubscriptionPlans
 import LoyaltyPointsComponent from "@/components/dashboard/LoyaltyPointsComponent";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import GoogleLocationPicker from "@/components/ui/GoogleLocationPicker";
-import { useJsApiLoader } from "@react-google-maps/api";
-import type { Libraries } from "@react-google-maps/api";
-
-const GOOGLE_MAPS_LIBRARIES: Libraries = ["places", "marker"];
+import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 
 function ProfileContent() {
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  const { isLoaded } = useGoogleMaps(); // Use shared provider
   const { data: session, update } = useSession();
   const searchParams = useSearchParams();
   const role =
@@ -443,6 +437,8 @@ function ProfileContent() {
                               alt="Avatar"
                               width={112}
                               height={112}
+                              loading="lazy"
+                              priority={false}
                               className="rounded-full object-cover w-28 h-28 border-2 border-gray-200 dark:border-gray-700"
                             />
                             {uploading && (

@@ -104,26 +104,44 @@ export default function ShipmentTrackingNew({
   }, [orders]);
 
   useEffect(() => {
-    const socket = getSocket();
-    // Listen for order status updates
-    socket.on(
-      "order-status-update",
-      (update: {
-        orderId: string;
-        status: string;
-        updatedFields?: Partial<DistributorOrder>;
-      }) => {
-        setLiveOrders((prev) =>
-          prev.map((order) =>
-            order._id === update.orderId
-              ? { ...order, status: update.status, ...update.updatedFields }
-              : order
-          )
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted) return;
+
+        // Listen for order status updates
+        socketInstance.on(
+          "order-status-update",
+          (update: {
+            orderId: string;
+            status: string;
+            updatedFields?: Partial<DistributorOrder>;
+          }) => {
+            if (!isMounted) return;
+            setLiveOrders((prev) =>
+              prev.map((order) =>
+                order._id === update.orderId
+                  ? { ...order, status: update.status, ...update.updatedFields }
+                  : order
+              )
+            );
+          }
         );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
       }
-    );
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("order-status-update");
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.off("order-status-update");
+      }
     };
   }, []);
 

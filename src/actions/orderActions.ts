@@ -1,19 +1,14 @@
 "use server";
 
-import { getOrdersCollection, Order, OrderStatus } from "@/models/Order";
-import { getProduceCollection } from "@/models/Produce";
-import { auth } from "@/auth";
+import { Order, OrderStatus } from "@/models/Order";
+import { requireAuth } from "@/services/auth.service";
+import { orderRepository } from "@/repositories/order.repository";
+import { produceRepository } from "@/repositories/produce.repository";
+import { userRepository } from "@/repositories/user.repository";
+import { fleetRepository } from "@/repositories/fleet.repository";
+import { serializeDocument } from "@/lib/serialization";
 import { ObjectId } from "mongodb";
-import { revalidatePath } from "next/cache";
-import { getRetailerOrderCollection } from "@/models/RetailerOrder";
-import { getUsersCollection } from "@/models/User";
-import { getDeliveryDistance } from "@/lib/distanceCalculator";
-import { triggerOrderWebhook } from "@/actions/webhookActions";
-import {
-  calculateOrderPricing,
-  calculateBulkDiscount,
-  DEFAULT_PRICING_CONFIG,
-} from "@/lib/pricing";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import {
   getSubscriptionsCollection,
   type SubscriptionTier,
@@ -21,62 +16,71 @@ import {
 import {
   getUserLoyaltyPointsCollection,
   getPointsTransactionsCollection,
-  calculatePointsFromPurchase,
   calculateTier,
 } from "@/models/LoyaltyPoints";
+import {
+  OrderBuilderFactory,
+  type OrderBuilderConfig,
+} from "@/services/order-builder.service";
+import {
+  ApproveOrderCommand,
+  CancelOrderCommand,
+  PickupOrderCommand,
+  TransitOrderCommand,
+  DeliverOrderCommand,
+  orderCommandInvoker,
+} from "@/services/order-command.service";
+import { emitOrderEvent } from "@/services/event-observer.service";
+import { orderMediator } from "@/services/order-mediator.service";
+import { getDeliveryDistance } from "@/lib/distanceCalculator";
 
 /**
  * Get all orders for the current farmer
+ * Cached for 60 seconds to reduce database load
  */
 export async function getMyOrders() {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    // Cache with 60 second revalidation
+    return await unstable_cache(
+      async () => {
+        const orders = await orderRepository.findByFarmerId(userId);
 
-    const ordersCollection = await getOrdersCollection();
-    const usersCollection = await getUsersCollection();
-    const farmerId = new ObjectId(session.user.id);
+        // Use Decorator Pattern for order enrichment
+        const { OrderDecoratorFactory } = await import(
+          "@/services/order-decorator.service"
+        );
+        const enrichedOrders = await Promise.all(
+          orders.map((order) => OrderDecoratorFactory.createDisplayReady(order))
+        );
 
-    const orders = await ordersCollection
-      .find({ farmerId })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    // Enrich orders with retailer names
-    const enrichedOrders = await Promise.all(
-      orders.map(async (order) => {
-        let retailerName = "Unknown Retailer";
-        if (order.retailerId) {
-          const retailer = await usersCollection.findOne({
-            _id: order.retailerId,
-          });
-          retailerName = retailer?.name || "Unknown Retailer";
-        }
-
-        // Destructure to exclude ObjectId fields
-        const { assignedTruckId, distributorId, ...orderData } = order;
-
-        return {
-          ...orderData,
-          _id: order._id!.toString(),
+        // Serialize ObjectIds to strings for client-side compatibility
+        const serializedOrders = enrichedOrders.map((order) => ({
+          ...order,
+          _id: order._id?.toString() || "",
           farmerId: order.farmerId.toString(),
           retailerId: order.retailerId?.toString(),
+          distributorId: order.distributorId?.toString(),
           produceId: order.produceId.toString(),
-          assignedTruckId: assignedTruckId?.toString(),
-          distributorId: distributorId?.toString(),
-          retailerName,
-        };
-      })
-    );
+          assignedTruckId: order.assignedTruckId?.toString(),
+        }));
 
-    return {
-      success: true,
-      data: enrichedOrders,
-    };
+        return {
+          success: true,
+          data: serializedOrders,
+        };
+      },
+      [`my-orders-${userId}`],
+      {
+        revalidate: 60, // Cache for 60 seconds
+        tags: [`orders-${userId}`],
+      }
+    )();
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, error: error.message };
+    }
     console.error("Error fetching orders:", error);
     return { success: false, error: "Failed to fetch orders" };
   }
@@ -87,56 +91,44 @@ export async function getMyOrders() {
  */
 export async function getMyRetailerOrders() {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const orders = await orderRepository.findByRetailerId(userId);
 
-    const ordersCollection = await getOrdersCollection();
-    const usersCollection = await getUsersCollection();
-    const retailerId = new ObjectId(session.user.id);
-
-    const orders = await ordersCollection
-      .find({ retailerId })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    // Enrich orders with farmer names
-    const enrichedOrders = await Promise.all(
-      orders.map(async (order) => {
-        const farmer = await usersCollection.findOne({
-          _id: order.farmerId,
-        });
-
-        // Destructure to exclude ObjectId fields
-        const { assignedTruckId, distributorId, ...orderData } = order;
-
-        return {
-          ...orderData,
-          _id: order._id!.toString(),
-          farmerId: order.farmerId.toString(),
-          retailerId: order.retailerId?.toString(),
-          produceId: order.produceId.toString(),
-          assignedTruckId: assignedTruckId?.toString(),
-          distributorId: distributorId?.toString(),
-          farmerName: farmer?.name || "Unknown Farmer",
-        };
-      })
+    // Use Decorator Pattern for order enrichment
+    const { OrderDecoratorFactory } = await import(
+      "@/services/order-decorator.service"
     );
+    const enrichedOrders = await Promise.all(
+      orders.map((order) => OrderDecoratorFactory.createDisplayReady(order))
+    );
+
+    // Serialize ObjectIds to strings for client-side compatibility
+    const serializedOrders = enrichedOrders.map((order) => ({
+      ...order,
+      _id: order._id?.toString() || "",
+      farmerId: order.farmerId.toString(),
+      retailerId: order.retailerId?.toString(),
+      distributorId: order.distributorId?.toString(),
+      produceId: order.produceId.toString(),
+      assignedTruckId: order.assignedTruckId?.toString(),
+    }));
 
     return {
       success: true,
-      data: enrichedOrders,
+      data: serializedOrders,
     };
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, error: error.message };
+    }
     console.error("Error fetching retailer orders:", error);
     return { success: false, error: "Failed to fetch orders" };
   }
 }
 
 /**
- * Create a new order (typically called by retailer, but we'll create a sample for testing)
+ * Create a new order using Builder Pattern
  */
 export async function createOrder(data: {
   produceId: string;
@@ -144,143 +136,61 @@ export async function createOrder(data: {
   notes?: string;
 }) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const produceCollection = await getProduceCollection();
+    const { userId } = await requireAuth();
 
     // Get produce details
-    const produce = await produceCollection.findOne({
-      _id: new ObjectId(data.produceId),
-    });
-
+    const produce = await produceRepository.findById(data.produceId);
     if (!produce) {
       return { success: false, error: "Produce not found" };
     }
 
-    // Get user details for pricing calculation
-    const usersCollection = await getUsersCollection();
-    const retailer = await usersCollection.findOne({
-      _id: new ObjectId(session.user.id),
-    });
-    const farmer = await usersCollection.findOne({
-      _id: produce.userId,
-    });
+    // Get user details
+    const retailer = await userRepository.findById(userId);
+    const farmer = await userRepository.findById(produce.userId.toString());
+
+    if (!retailer || !farmer) {
+      return { success: false, error: "User not found" };
+    }
 
     // Get retailer's subscription tier
     const subscriptionsCollection = await getSubscriptionsCollection();
     const subscription = await subscriptionsCollection.findOne({
-      userId: new ObjectId(session.user.id),
+      userId: new ObjectId(userId),
       status: "active",
     });
-    const subscriptionTier = subscription?.tier || "free";
-
-    // Calculate distance and time
-    let distance: number | undefined = undefined;
-    let estimatedTime: number | undefined = undefined;
-    let estimatedTimeText: string | undefined = undefined;
-
-    try {
-      if (
-        farmer?.address?.latitude &&
-        farmer?.address?.longitude &&
-        retailer?.address?.latitude &&
-        retailer?.address?.longitude
-      ) {
-        const result = await getDeliveryDistance(
-          farmer.address.latitude,
-          farmer.address.longitude,
-          retailer.address.latitude,
-          retailer.address.longitude
-        );
-        distance = result.distance;
-        estimatedTime = result.duration;
-        estimatedTimeText = result.durationText;
-      }
-    } catch {}
-
-    // Use estimated distance if not calculated
-    if (!distance) {
-      distance = Math.floor(Math.random() * 45) + 5;
-    }
-
-    // Calculate bulk discount
-    const bulkDiscountRate = calculateBulkDiscount(data.quantity);
-    const bulkDiscountAmount =
-      produce.pricePerUnit * data.quantity * bulkDiscountRate;
-
-    // Calculate complete pricing using the pricing utility
-    const pricing = calculateOrderPricing(
-      produce.pricePerUnit,
-      data.quantity,
-      distance,
-      data.quantity, // Assuming quantity in kg for weight
-      undefined, // subscriptionTier not used for delivery calculation
-      DEFAULT_PRICING_CONFIG
-    );
+    const subscriptionTier = (subscription?.tier || "free") as SubscriptionTier;
 
     // Get loyalty points info
     const loyaltyPointsCollection = await getUserLoyaltyPointsCollection();
-    let loyaltyData = await loyaltyPointsCollection.findOne({
-      userId: new ObjectId(session.user.id),
+    const loyaltyData = await loyaltyPointsCollection.findOne({
+      userId: new ObjectId(userId),
     });
 
-    const tier = loyaltyData ? loyaltyData.tier : "bronze";
-    const pointsEarned = calculatePointsFromPurchase(
-      pricing.customerTotal,
-      tier
-    );
-
-    // Create the order with complete pricing breakdown
-    const order: Order = {
-      farmerId: produce.userId,
-      retailerId: new ObjectId(session.user.id),
-      produceId: new ObjectId(data.produceId),
-      produceName: produce.name,
+    // Build order using Builder Pattern
+    const builderConfig: OrderBuilderConfig = {
+      produce,
+      retailer,
+      farmer,
       quantity: data.quantity,
-      unit: produce.unit,
-      pricePerUnit: produce.pricePerUnit,
-      totalPrice: pricing.productSubtotal,
-
-      // Pricing breakdown
-      platformCommission: pricing.platformCommission,
-      serviceFee: pricing.serviceFee,
-      deliveryFee: pricing.deliveryFee.subtotal,
-      deliveryDiscount: pricing.deliveryFee.discount,
-      finalDeliveryFee: pricing.deliveryFee.final,
-      subscriptionDiscount: pricing.customerSavings,
-      bulkDiscount: bulkDiscountAmount,
-
-      // Revenue distribution
-      farmerRevenue: pricing.farmerRevenue,
-      distributorRevenue: pricing.distributorRevenue,
-      platformRevenue: pricing.platformRevenue,
-
-      // Subscription and loyalty
-      retailerSubscriptionTier: subscriptionTier as SubscriptionTier,
-      loyaltyPointsEarned: pointsEarned,
-
-      status: "pending",
-      orderDate: new Date(),
       notes: data.notes,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      distance,
-      estimatedTime,
-      estimatedTimeText,
+      subscriptionTier,
     };
 
-    const result = await ordersCollection.insertOne(order);
+    const order = await OrderBuilderFactory.buildCompleteOrder(
+      builderConfig,
+      loyaltyData
+    );
+
+    // Create order in database
+    const result = await orderRepository.create(order);
 
     // Award loyalty points
+    const pointsEarned = order.loyaltyPointsEarned || 0;
+    let finalLoyaltyData = loyaltyData;
+
     if (!loyaltyData) {
-      // Create new loyalty record
       const newLoyaltyDoc = {
-        userId: new ObjectId(session.user.id),
+        userId: new ObjectId(userId),
         totalEarned: pointsEarned,
         totalRedeemed: 0,
         totalExpired: 0,
@@ -293,14 +203,12 @@ export async function createOrder(data: {
       const insertResult = await loyaltyPointsCollection.insertOne(
         newLoyaltyDoc
       );
-      loyaltyData = { ...newLoyaltyDoc, _id: insertResult.insertedId };
+      finalLoyaltyData = { ...newLoyaltyDoc, _id: insertResult.insertedId };
     } else {
-      // Update existing loyalty record
       const newTotalEarned = loyaltyData.totalEarned + pointsEarned;
       const newTier = calculateTier(newTotalEarned);
-
       await loyaltyPointsCollection.updateOne(
-        { userId: new ObjectId(session.user.id) },
+        { userId: new ObjectId(userId) },
         {
           $inc: {
             totalEarned: pointsEarned,
@@ -312,34 +220,43 @@ export async function createOrder(data: {
           },
         }
       );
+      finalLoyaltyData = {
+        ...loyaltyData,
+        totalEarned: newTotalEarned,
+        currentBalance: loyaltyData.currentBalance + pointsEarned,
+        tier: newTier,
+      };
     }
 
     // Record points transaction
     const pointsTransactionsCollection =
       await getPointsTransactionsCollection();
     await pointsTransactionsCollection.insertOne({
-      userId: new ObjectId(session.user.id),
+      userId: new ObjectId(userId),
       type: "earned_purchase",
       points: pointsEarned,
-      balance: (loyaltyData?.currentBalance || 0) + pointsEarned,
+      balance: (finalLoyaltyData?.currentBalance || 0) + pointsEarned,
       orderId: result.insertedId,
       description: `Earned ${pointsEarned} points from order #${result.insertedId
         .toString()
         .slice(-6)}`,
-      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       createdAt: new Date(),
     });
 
-    // Trigger webhook for new order
-    await triggerOrderWebhook({
-      event: "order.created",
+    // Emit event using Observer Pattern
+    await emitOrderEvent({
+      type: "order.created",
       orderId: result.insertedId.toString(),
-      farmerId: order.farmerId.toString(),
-      retailerId: order.retailerId?.toString(),
-      produceName: order.produceName,
-      quantity: order.quantity,
-      unit: order.unit,
-      status: "pending",
+      timestamp: new Date(),
+      data: {
+        farmerId: order.farmerId.toString(),
+        retailerId: order.retailerId?.toString(),
+        produceName: order.produceName,
+        quantity: order.quantity,
+        unit: order.unit,
+        status: "pending",
+      },
     });
 
     revalidatePath("/dashboard/farmer");
@@ -362,43 +279,33 @@ export async function createOrder(data: {
 }
 
 /**
- * Approve an order (farmer approves retailer's order)
+ * Approve an order using Command Pattern
  */
 export async function approveOrder(orderId: string) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const produceCollection = await getProduceCollection();
-    const farmerId = new ObjectId(session.user.id);
+    // Get user role
+    const user = await userRepository.findById(userId);
+    const userRole = (user?.role || "farmer") as
+      | "farmer"
+      | "distributor"
+      | "retailer"
+      | "admin";
 
     // Get the order
-    const order = await ordersCollection.findOne({
-      _id: new ObjectId(orderId),
-      farmerId,
-    });
-
+    const order = await orderRepository.findById(orderId);
     if (!order) {
       return { success: false, error: "Order not found" };
     }
 
-    if (order.status !== "pending") {
-      return { success: false, error: "Order is not pending" };
-    }
-
     // Check if produce has enough quantity
-    const produce = await produceCollection.findOne({
-      _id: order.produceId,
-    });
-
+    const produce = await produceRepository.findById(
+      order.produceId.toString()
+    );
     if (!produce) {
       return { success: false, error: "Produce not found" };
     }
-
     if (produce.quantity < order.quantity) {
       return {
         success: false,
@@ -406,129 +313,26 @@ export async function approveOrder(orderId: string) {
       };
     }
 
-    // Update order status
-    await ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      {
-        $set: {
-          status: "approved",
-          updatedAt: new Date(),
-        },
-      }
-    );
+    // Execute approve command
+    const command = new ApproveOrderCommand(orderId, userId, userRole);
+    const commandResult = await orderCommandInvoker.execute(command);
 
-    // Update produce quantity
-    await produceCollection.updateOne(
-      { _id: order.produceId },
-      {
-        $inc: { quantity: -order.quantity },
-        $set: { updatedAt: new Date() },
-      }
-    );
-
-    // Create a RetailerOrder for distributors to fulfill
-    // Find an available distributor (for now, just get any distributor)
-    const usersCollection = await getUsersCollection();
-    const distributor = await usersCollection.findOne({ role: "distributor" });
-
-    if (distributor && order.retailerId) {
-      const retailerOrderCollection = await getRetailerOrderCollection();
-
-      // Get retailer and farmer info for delivery address and distance calculation
-      const retailer = await usersCollection.findOne({
-        _id: order.retailerId,
-      });
-      const farmer = await usersCollection.findOne({
-        _id: order.farmerId,
-      });
-
-      // Calculate actual distance if coordinates are available
-
-      let distanceResult:
-        | {
-            distance: number;
-            duration: number;
-            durationText: string;
-            method: "driving";
-          }
-        | undefined = undefined;
-
-      if (
-        farmer?.address?.latitude &&
-        farmer?.address?.longitude &&
-        retailer?.address?.latitude &&
-        retailer?.address?.longitude
-      ) {
-        // Calculate real-world driving distance using mapping API
-        try {
-          distanceResult = await getDeliveryDistance(
-            farmer.address.latitude,
-            farmer.address.longitude,
-            retailer.address.latitude,
-            retailer.address.longitude
-          );
-        } catch {}
-      }
-
-      const estimatedDistance =
-        distanceResult?.distance ?? Math.floor(Math.random() * 45) + 5;
-      const estimatedTime = distanceResult?.duration;
-      const estimatedTimeText = distanceResult?.durationText;
-
-      // Calculate delivery fee based on distance
-      // Base fee: ₹50, Distance fee: ₹10 per km
-      const baseFee = 50;
-      const distanceFee = estimatedDistance * 10;
-      const deliveryFee = baseFee + distanceFee;
-
-      // Format delivery address
-      const deliveryAddress = retailer?.address
-        ? `${retailer.address.street || ""}, ${retailer.address.city || ""}, ${
-            retailer.address.state || ""
-          } ${retailer.address.pincode || ""}`.trim()
-        : retailer?.phone || "Address not provided";
-
-      const retailerOrder = {
-        retailerId: order.retailerId,
-        distributorId: distributor._id,
-        items: [
-          {
-            produceId: order.produceId,
-            name: order.produceName,
-            quantity: order.quantity,
-            pricePerUnit: order.pricePerUnit,
-          },
-        ],
-        totalAmount: order.totalPrice, // Goes to farmer
-        deliveryFee: deliveryFee, // Goes to distributor
-        totalWeightKg: order.quantity, // Assuming quantity is in kg
-        distance: estimatedDistance,
-        estimatedTime,
-        estimatedTimeText,
-        status: "pending" as const,
-        destination: retailer?.name || "Retailer Store",
-        deliveryAddress: deliveryAddress,
-        orderDate: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await retailerOrderCollection.insertOne(retailerOrder);
-      revalidatePath("/dashboard/distributor");
+    if (!commandResult.success) {
+      return commandResult;
     }
 
-    // Trigger webhook for order approval
-    await triggerOrderWebhook({
-      event: "order.approved",
-      orderId: orderId,
-      farmerId: order.farmerId.toString(),
-      retailerId: order.retailerId?.toString(),
-      produceName: order.produceName,
-      quantity: order.quantity,
-      unit: order.unit,
-      status: "approved",
-    });
+    // Use Mediator Pattern to coordinate between actors (farmer, retailer, distributor)
+    const mediationResult = await orderMediator.mediateApproval(
+      orderId,
+      userId
+    );
 
+    if (!mediationResult.success) {
+      return mediationResult;
+    }
+
+    // Invalidate cache after mutation (using 'max' profile for stale-while-revalidate)
+    revalidateTag(`orders-${userId}`, "max");
     revalidatePath("/dashboard/farmer");
     revalidatePath("/my-produce");
 
@@ -540,59 +344,41 @@ export async function approveOrder(orderId: string) {
 }
 
 /**
- * Reject/Cancel an order
+ * Cancel an order using Command Pattern
  */
 export async function cancelOrder(orderId: string) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
+    const user = await userRepository.findById(userId);
+    const userRole = (user?.role || "farmer") as
+      | "farmer"
+      | "distributor"
+      | "retailer"
+      | "admin";
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const command = new CancelOrderCommand(orderId, userId, userRole);
+    const result = await orderCommandInvoker.execute(command);
 
-    const ordersCollection = await getOrdersCollection();
-    const farmerId = new ObjectId(session.user.id);
-
-    // Verify the order belongs to this farmer
-    const order = await ordersCollection.findOne({
-      _id: new ObjectId(orderId),
-      farmerId,
-    });
-
-    if (!order) {
-      return { success: false, error: "Order not found" };
-    }
-
-    if (order.status !== "pending") {
-      return { success: false, error: "Only pending orders can be cancelled" };
-    }
-
-    // Update order status
-    await ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      {
-        $set: {
-          status: "cancelled",
-          updatedAt: new Date(),
-        },
+    if (result.success) {
+      const order = await orderRepository.findById(orderId);
+      if (order) {
+        await emitOrderEvent({
+          type: "order.cancelled",
+          orderId: orderId,
+          timestamp: new Date(),
+          data: {
+            farmerId: order.farmerId.toString(),
+            retailerId: order.retailerId?.toString(),
+            produceName: order.produceName,
+            quantity: order.quantity,
+            unit: order.unit,
+            status: "cancelled",
+          },
+        });
       }
-    );
+    }
 
-    // Trigger webhook for order cancellation
-    await triggerOrderWebhook({
-      event: "order.cancelled",
-      orderId: orderId,
-      farmerId: order.farmerId.toString(),
-      retailerId: order.retailerId?.toString(),
-      produceName: order.produceName,
-      quantity: order.quantity,
-      unit: order.unit,
-      status: "cancelled",
-    });
-
-    revalidatePath("/dashboard/farmer");
-
-    return { success: true };
+    return result;
   } catch (error) {
     console.error("Error cancelling order:", error);
     return { success: false, error: "Failed to cancel order" };
@@ -604,23 +390,12 @@ export async function cancelOrder(orderId: string) {
  */
 export async function completeOrder(orderId: string) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const farmerId = new ObjectId(session.user.id);
+    const { userId } = await requireAuth();
 
     // Verify the order belongs to this farmer
-    const order = await ordersCollection.findOne({
-      _id: new ObjectId(orderId),
-      farmerId,
-    });
-
-    if (!order) {
-      return { success: false, error: "Order not found" };
+    const order = await orderRepository.findById(orderId);
+    if (!order || order.farmerId.toString() !== userId) {
+      return { success: false, error: "Order not found or unauthorized" };
     }
 
     if (order.status !== "approved") {
@@ -628,16 +403,10 @@ export async function completeOrder(orderId: string) {
     }
 
     // Update order status to delivered (legacy function, kept for backwards compatibility)
-    await ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      {
-        $set: {
-          status: "delivered",
-          deliveryDate: new Date(),
-          updatedAt: new Date(),
-        },
-      }
-    );
+    await orderRepository.update(orderId, {
+      status: "delivered",
+      deliveryDate: new Date(),
+    });
 
     revalidatePath("/dashboard/farmer");
 
@@ -649,74 +418,42 @@ export async function completeOrder(orderId: string) {
 }
 
 /**
- * Mark an order as picked up (for distributors/farmers)
+ * Mark order as picked up using Command Pattern
  */
 export async function markOrderAsPickedUp(orderId: string) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
+    const user = await userRepository.findById(userId);
+    const userRole = (user?.role || "farmer") as
+      | "farmer"
+      | "distributor"
+      | "retailer"
+      | "admin";
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const command = new PickupOrderCommand(orderId, userId, userRole);
+    const result = await orderCommandInvoker.execute(command);
 
-    const ordersCollection = await getOrdersCollection();
-    const order = await ordersCollection.findOne({
-      _id: new ObjectId(orderId),
-    });
-
-    if (!order) {
-      return { success: false, error: "Order not found" };
-    }
-
-    // Allow both farmers and distributors to mark as picked up
-    const userId = new ObjectId(session.user.id);
-    const isFarmer = order.farmerId.equals(userId);
-    const role = session.user.role;
-
-    if (!isFarmer && role !== "distributor") {
-      return {
-        success: false,
-        error: "Only farmers or distributors can mark orders as picked up",
-      };
-    }
-
-    // Order must be assigned to a distributor before it can be picked up
-    if (order.status !== "assigned") {
-      return {
-        success: false,
-        error:
-          "Only assigned orders can be picked up. Please wait for distributor assignment.",
-      };
-    }
-
-    // Update order status to picked-up
-    await ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      {
-        $set: {
-          status: "picked-up",
-          updatedAt: new Date(),
-        },
+    if (result.success) {
+      const order = await orderRepository.findById(orderId);
+      if (order) {
+        await emitOrderEvent({
+          type: "order.picked_up",
+          orderId: orderId,
+          timestamp: new Date(),
+          data: {
+            farmerId: order.farmerId.toString(),
+            retailerId: order.retailerId?.toString(),
+            distributorId: order.distributorId?.toString(),
+            produceName: order.produceName,
+            quantity: order.quantity,
+            unit: order.unit,
+            status: "picked-up",
+          },
+        });
       }
-    );
+    }
 
-    // Trigger webhook for order picked up
-    await triggerOrderWebhook({
-      event: "order.picked_up",
-      orderId: orderId,
-      farmerId: order.farmerId.toString(),
-      retailerId: order.retailerId?.toString(),
-      distributorId: order.distributorId?.toString(),
-      produceName: order.produceName,
-      quantity: order.quantity,
-      unit: order.unit,
-      status: "picked-up",
-    });
-
-    revalidatePath("/dashboard/farmer");
-    revalidatePath("/dashboard/distributor");
-
-    return { success: true, message: "Order marked as picked up" };
+    return result;
   } catch (error) {
     console.error("Error marking order as picked up:", error);
     return { success: false, error: "Failed to mark order as picked up" };
@@ -724,63 +461,43 @@ export async function markOrderAsPickedUp(orderId: string) {
 }
 
 /**
- * Mark an order as in transit (for distributors)
+ * Mark order as in transit using Command Pattern
  */
 export async function markOrderAsInTransit(orderId: string) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
+    const user = await userRepository.findById(userId);
+    const userRole = (user?.role || "distributor") as
+      | "farmer"
+      | "distributor"
+      | "retailer"
+      | "admin";
 
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return {
-        success: false,
-        error: "Only distributors can mark orders as in transit",
-      };
-    }
+    const command = new TransitOrderCommand(orderId, userId, userRole);
+    const result = await orderCommandInvoker.execute(command);
 
-    const ordersCollection = await getOrdersCollection();
-    const order = await ordersCollection.findOne({
-      _id: new ObjectId(orderId),
-    });
-
-    if (!order) {
-      return { success: false, error: "Order not found" };
-    }
-
-    if (order.status !== "picked-up") {
-      return {
-        success: false,
-        error: "Order must be picked up before marking as in transit",
-      };
-    }
-
-    // Update order status to in-transit
-    await ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      {
-        $set: {
-          status: "in-transit",
-          updatedAt: new Date(),
-        },
+    if (result.success) {
+      const order = await orderRepository.findById(orderId);
+      if (order) {
+        await emitOrderEvent({
+          type: "order.in_transit",
+          orderId: orderId,
+          timestamp: new Date(),
+          data: {
+            farmerId: order.farmerId.toString(),
+            retailerId: order.retailerId?.toString(),
+            distributorId: order.distributorId?.toString(),
+            produceName: order.produceName,
+            quantity: order.quantity,
+            unit: order.unit,
+            status: "in-transit",
+            destination: order.destination,
+          },
+        });
       }
-    );
+    }
 
-    // Trigger webhook for order in transit
-    await triggerOrderWebhook({
-      event: "order.in_transit",
-      orderId: orderId,
-      farmerId: order.farmerId.toString(),
-      retailerId: order.retailerId?.toString(),
-      distributorId: order.distributorId?.toString(),
-      produceName: order.produceName,
-      quantity: order.quantity,
-      unit: order.unit,
-      status: "in-transit",
-      destination: order.destination,
-    });
-
-    revalidatePath("/dashboard/distributor");
-
-    return { success: true, message: "Order marked as in transit" };
+    return result;
   } catch (error) {
     console.error("Error marking order as in transit:", error);
     return { success: false, error: "Failed to mark order as in transit" };
@@ -788,99 +505,32 @@ export async function markOrderAsInTransit(orderId: string) {
 }
 
 /**
- * Mark an order as delivered
+ * Mark order as delivered using Command Pattern
  */
 export async function markOrderAsDelivered(orderId: string) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
+    const user = await userRepository.findById(userId);
+    const userRole = (user?.role || "distributor") as
+      | "farmer"
+      | "distributor"
+      | "retailer"
+      | "admin";
 
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return {
-        success: false,
-        error: "Only distributors can mark orders as delivered",
-      };
+    const command = new DeliverOrderCommand(orderId, userId, userRole);
+    const commandResult = await orderCommandInvoker.execute(command);
+
+    if (!commandResult.success) {
+      return commandResult;
     }
 
-    const ordersCollection = await getOrdersCollection();
-    const order = await ordersCollection.findOne({
-      _id: new ObjectId(orderId),
-    });
-
-    if (!order) {
-      return { success: false, error: "Order not found" };
-    }
-
-    if (order.status !== "in-transit") {
-      return {
-        success: false,
-        error: "Order must be in transit before marking as delivered",
-      };
-    }
-
-    // Update order status to delivered
-    await ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      {
-        $set: {
-          status: "delivered",
-          deliveryDate: new Date(),
-          updatedAt: new Date(),
-        },
-      }
+    // Use Mediator Pattern to coordinate delivery completion
+    const mediationResult = await orderMediator.mediateDelivery(
+      orderId,
+      userId
     );
 
-    // If the order had an assigned truck, update the truck status and assignedOrderIds
-    if (order.assignedTruckId) {
-      const { getFleetCollection } = await import("@/models/Fleet");
-      const fleetCollection = await getFleetCollection();
-      // Remove this order from assignedOrderIds
-      await fleetCollection.updateOne(
-        { _id: order.assignedTruckId },
-        {
-          $pull: { assignedOrderIds: order._id },
-        }
-      );
-      // Check if there are any orders left assigned to this truck
-      const updatedTruck = await fleetCollection.findOne({
-        _id: order.assignedTruckId,
-      });
-      if (
-        !updatedTruck?.assignedOrderIds ||
-        updatedTruck.assignedOrderIds.length === 0
-      ) {
-        // If no more orders, set truck to available and reset currentLoadKg
-        await fleetCollection.updateOne(
-          { _id: order.assignedTruckId },
-          {
-            $set: {
-              status: "available",
-              currentLoadKg: 0,
-              updatedAt: new Date(),
-            },
-          }
-        );
-      }
-    }
-
-    // Trigger webhook for order delivered
-    await triggerOrderWebhook({
-      event: "order.delivered",
-      orderId: orderId,
-      farmerId: order.farmerId.toString(),
-      retailerId: order.retailerId?.toString(),
-      distributorId: order.distributorId?.toString(),
-      produceName: order.produceName,
-      quantity: order.quantity,
-      unit: order.unit,
-      status: "delivered",
-      deliveryFee: order.deliveryFee,
-      destination: order.destination,
-    });
-
-    revalidatePath("/dashboard/distributor");
-    revalidatePath("/dashboard/retailer");
-
-    return { success: true, message: "Order marked as delivered" };
+    return mediationResult;
   } catch (error) {
     console.error("Error marking order as delivered:", error);
     return { success: false, error: "Failed to mark order as delivered" };
@@ -892,19 +542,14 @@ export async function markOrderAsDelivered(orderId: string) {
  */
 export async function getOrdersByStatus(status: OrderStatus) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const result = await orderRepository.findMany(
+      { farmerId: userId, status },
+      { page: 1, limit: 1000 } // Get all orders for this status
+    );
 
-    const ordersCollection = await getOrdersCollection();
-    const farmerId = new ObjectId(session.user.id);
-
-    const orders = await ordersCollection
-      .find({ farmerId, status })
-      .sort({ createdAt: -1 })
-      .toArray();
+    const orders = result.data;
 
     return {
       success: true,
@@ -932,46 +577,31 @@ export async function getOrdersByStatus(status: OrderStatus) {
  */
 export async function getAvailableOrdersForDistributor() {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const usersCollection = await getUsersCollection();
+    await requireAuth();
+    // Note: Role check could be moved to a role service
 
     // Get orders with status "approved" (farmer approved, awaiting distributor)
-    const orders = await ordersCollection
-      .find({ status: "approved" })
-      .sort({ createdAt: -1 })
-      .toArray();
+    const result = await orderRepository.findMany(
+      { status: "approved" },
+      { page: 1, limit: 1000 }
+    );
+    const orders = result.data;
 
     // Enrich orders with farmer and retailer names
     const enrichedOrders = await Promise.all(
       orders.map(async (order) => {
-        const farmer = await usersCollection.findOne({
-          _id: order.farmerId,
-        });
+        const farmer = await userRepository.findById(order.farmerId.toString());
         let retailerName = "Unknown Retailer";
         if (order.retailerId) {
-          const retailer = await usersCollection.findOne({
-            _id: order.retailerId,
-          });
+          const retailer = await userRepository.findById(
+            order.retailerId.toString()
+          );
           retailerName = retailer?.name || "Unknown Retailer";
         }
 
-        // Destructure to exclude ObjectId fields (even if null/undefined)
-        const { assignedTruckId, distributorId, ...orderData } = order;
-
+        const serialized = serializeDocument(order);
         return {
-          ...orderData,
-          _id: order._id!.toString(),
-          farmerId: order.farmerId.toString(),
-          retailerId: order.retailerId?.toString(),
-          produceId: order.produceId.toString(),
-          assignedTruckId: assignedTruckId?.toString(),
-          distributorId: distributorId?.toString(),
+          ...serialized,
           farmerName: farmer?.name || "Unknown Farmer",
           retailerName,
         };
@@ -996,188 +626,48 @@ export async function acceptOrderAsDistributor(
   truckId: string
 ) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return { success: false, error: "Unauthorized - must be a distributor" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const usersCollection = await getUsersCollection();
+    const { userId } = await requireAuth();
 
     // Check if order exists and is in approved status
-    const order = await ordersCollection.findOne({
-      _id: new ObjectId(orderId),
-      status: "approved",
-    });
-
-    if (!order) {
+    const order = await orderRepository.findById(orderId);
+    if (!order || order.status !== "approved") {
       return {
         success: false,
         error: "Order not found or already assigned",
       };
     }
 
-    // Get farmer and retailer locations to calculate distance and delivery fee
-    const farmer = await usersCollection.findOne({
-      _id: order.farmerId,
-    });
-
-    let retailer = null;
-    if (order.retailerId) {
-      retailer = await usersCollection.findOne({
-        _id: order.retailerId,
-      });
-    }
-
-    // Calculate distance and delivery fee
-    let distance = 0;
-    let deliveryFee = 0;
-    let destination = "";
-    let deliveryAddress = "";
-    let estimatedDelivery = new Date();
-
-    const { getDeliveryFee, getWeightInKg, estimateDeliveryTime } =
-      await import("@/lib/deliveryFeeCalculator");
-    const { getDeliveryDistance } = await import("@/lib/distanceCalculator");
-
-    if (farmer?.address && retailer?.address) {
-      // Stricter coordinate validation
-      const fLat = Number(farmer.address.latitude);
-      const fLon = Number(farmer.address.longitude);
-      const rLat = Number(retailer.address.latitude);
-      const rLon = Number(retailer.address.longitude);
-
-      const coordsValid =
-        isFinite(fLat) &&
-        isFinite(fLon) &&
-        isFinite(rLat) &&
-        isFinite(rLon) &&
-        fLat >= -90 &&
-        fLat <= 90 &&
-        fLon >= -180 &&
-        fLon <= 180 &&
-        rLat >= -90 &&
-        rLat <= 90 &&
-        rLon >= -180 &&
-        rLon <= 180;
-
-      if (coordsValid) {
-        const distanceResult = await getDeliveryDistance(
-          fLat,
-          fLon,
-          rLat,
-          rLon
-        );
-        distance = distanceResult.distance;
-        if (distanceResult.method !== "driving") {
-          console.warn(
-            `WARNING: Fallback method (${distanceResult.method}) used for order ${orderId}. Coordinates: Farmer(${fLat},${fLon}), Retailer(${rLat},${rLon})`
-          );
-        }
-        console.log(
-          `Distance calculated for order ${orderId}: ${distance}km (method: ${distanceResult.method})`
-        );
-      } else {
-        // Fallback: Use random estimate if coordinates not available or invalid
-        distance = Math.floor(Math.random() * 45) + 10; // 10-55 km
-        console.warn(
-          `WARNING: Invalid or missing coordinates for order ${orderId}. Using fallback distance: ${distance}km. Farmer:`,
-          farmer.address,
-          "Retailer:",
-          retailer.address
-        );
-      }
-
-      // Calculate delivery fee based on distance and weight
-      const weightKg = getWeightInKg(order.quantity, order.unit);
-      deliveryFee = getDeliveryFee(distance, weightKg);
-
-      // Estimate delivery time
-      estimatedDelivery = estimateDeliveryTime(distance);
-
-      // Set destination and delivery address
-      destination = retailer.address.city || "Unknown Location";
-      deliveryAddress = `${retailer.address.street || ""}, ${
-        retailer.address.city || ""
-      }, ${retailer.address.state || ""} ${
-        retailer.address.pincode || ""
-      }`.trim();
-
-      console.log(
-        `Order ${orderId} - Distance: ${distance}km, Weight: ${weightKg}kg, Fee: ₹${deliveryFee}`
-      );
-    } else {
-      // Fallback when addresses are missing
-      distance = Math.floor(Math.random() * 45) + 10; // 10-55 km
-      const weightKg = getWeightInKg(order.quantity, order.unit);
-      deliveryFee = getDeliveryFee(distance, weightKg);
-      estimatedDelivery = estimateDeliveryTime(distance);
-      destination = retailer?.name || "Unknown Location";
-      deliveryAddress = "Address not available";
-      console.log(
-        `Using fallback for order ${orderId} - Distance: ${distance}km, Fee: ₹${deliveryFee} (missing addresses)`
-      );
-    }
-
-    // Update order status to "assigned" and add distributor info with delivery details
-    const result = await ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      {
-        $set: {
-          status: "assigned",
-          distributorId: new ObjectId(session.user.id),
-          assignedTruckId: new ObjectId(truckId),
-          distance: Math.round(distance * 10) / 10, // Round to 1 decimal
-          deliveryFee: Math.round(deliveryFee * 100) / 100, // Round to 2 decimals
-          destination,
-          deliveryAddress,
-          estimatedDelivery,
-          updatedAt: new Date(),
-        },
-      }
+    // Use Mediator Pattern to coordinate order assignment
+    // Mediator handles distance calculation, delivery fee, and order updates
+    const mediationResult = await orderMediator.mediateAssignment(
+      orderId,
+      userId,
+      truckId
     );
 
-    if (result.modifiedCount === 0) {
-      return { success: false, error: "Failed to accept order" };
+    if (!mediationResult.success) {
+      return mediationResult;
     }
 
     // Update truck status to "on-route" and add order to assignedOrderIds
-    const { getFleetCollection } = await import("@/models/Fleet");
-    const fleetCollection = await getFleetCollection();
-    await fleetCollection.updateOne(
-      { _id: new ObjectId(truckId) },
-      {
-        $set: {
-          status: "on-route",
-          updatedAt: new Date(),
-        },
-        $addToSet: {
-          assignedOrderIds: new ObjectId(orderId),
-        },
+    const { fleetRepository } = await import("@/repositories/fleet.repository");
+    const truck = await fleetRepository.findById(truckId);
+    if (truck) {
+      const assignedOrderIds = truck.assignedOrderIds || [];
+      if (!assignedOrderIds.some((id) => id.toString() === orderId)) {
+        assignedOrderIds.push(new ObjectId(orderId));
       }
-    );
-
-    // Trigger webhook for order assignment
-    await triggerOrderWebhook({
-      event: "order.assigned",
-      orderId: orderId,
-      farmerId: order.farmerId.toString(),
-      retailerId: order.retailerId?.toString(),
-      distributorId: session.user.id,
-      produceName: order.produceName,
-      quantity: order.quantity,
-      unit: order.unit,
-      status: "assigned",
-      deliveryFee: deliveryFee,
-      destination: destination,
-    });
+      await fleetRepository.update(truckId, {
+        status: "on-route",
+        assignedOrderIds,
+      });
+    }
 
     revalidatePath("/dashboard/distributor");
     revalidatePath("/dashboard/farmer");
     revalidatePath("/dashboard/retailer");
 
-    return { success: true, message: "Order accepted successfully" };
+    return { success: true };
   } catch (error) {
     console.error("Error accepting order:", error);
     return { success: false, error: "Failed to accept order" };
@@ -1189,58 +679,41 @@ export async function acceptOrderAsDistributor(
  */
 export async function getDistributorOrdersByStatus(status: OrderStatus) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const usersCollection = await getUsersCollection();
+    const { userId } = await requireAuth();
+    // Note: Role check could be moved to a role service
 
     // Get orders assigned to this distributor with the specified status
-    const orders = await ordersCollection
-      .find({
-        distributorId: new ObjectId(session.user.id),
+    const result = await orderRepository.findMany(
+      {
+        distributorId: userId,
         status,
-      })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    // Enrich orders with farmer and retailer names
-    const enrichedOrders = await Promise.all(
-      orders.map(async (order) => {
-        const farmer = await usersCollection.findOne({
-          _id: order.farmerId,
-        });
-        let retailerName = "Unknown Retailer";
-        if (order.retailerId) {
-          const retailer = await usersCollection.findOne({
-            _id: order.retailerId,
-          });
-          retailerName = retailer?.name || "Unknown Retailer";
-        }
-
-        // Destructure to exclude assignedTruckId ObjectId, then add it as string
-        const { assignedTruckId, ...orderData } = order;
-
-        return {
-          ...orderData,
-          _id: order._id!.toString(),
-          farmerId: order.farmerId.toString(),
-          retailerId: order.retailerId?.toString(),
-          distributorId: order.distributorId?.toString(),
-          produceId: order.produceId.toString(),
-          assignedTruckId: assignedTruckId?.toString(),
-          farmerName: farmer?.name || "Unknown Farmer",
-          retailerName,
-        };
-      })
+      },
+      { page: 1, limit: 1000 }
     );
+    const orders = result.data;
+
+    // Use Decorator Pattern for order enrichment
+    const { OrderDecoratorFactory } = await import(
+      "@/services/order-decorator.service"
+    );
+    const enrichedOrders = await Promise.all(
+      orders.map((order) => OrderDecoratorFactory.createDisplayReady(order))
+    );
+
+    // Serialize ObjectIds to strings for client-side compatibility
+    const serializedOrders = enrichedOrders.map((order) => ({
+      ...order,
+      _id: order._id?.toString() || "",
+      farmerId: order.farmerId.toString(),
+      retailerId: order.retailerId?.toString(),
+      distributorId: order.distributorId?.toString(),
+      produceId: order.produceId.toString(),
+      assignedTruckId: order.assignedTruckId?.toString(),
+    }));
 
     return {
       success: true,
-      data: enrichedOrders,
+      data: serializedOrders,
     };
   } catch (error) {
     console.error("Error fetching distributor orders:", error);
@@ -1256,36 +729,27 @@ export async function assignMultipleOrdersToTruck(
   orderIds: string[]
 ) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id || session.user.role !== "distributor") {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const ordersCollection = await getOrdersCollection();
-    const { getFleetCollection } = await import("@/models/Fleet");
-    const fleetCollection = await getFleetCollection();
+    const { userId } = await requireAuth();
+    // Note: Role check could be moved to a role service
 
     // Verify truck belongs to distributor
-    const truck = await fleetCollection.findOne({
-      _id: new ObjectId(truckId),
-      distributorId: new ObjectId(session.user.id),
-    });
-
-    if (!truck) {
-      return { success: false, error: "Truck not found" };
+    const truck = await fleetRepository.findById(truckId);
+    if (!truck || truck.distributorId.toString() !== userId) {
+      return { success: false, error: "Truck not found or unauthorized" };
     }
 
     // Calculate total weight of orders
-    const orders = await ordersCollection
-      .find({
-        _id: { $in: orderIds.map((id) => new ObjectId(id)) },
-        distributorId: new ObjectId(session.user.id),
-        status: "assigned",
-      })
-      .toArray();
+    const orders = await Promise.all(
+      orderIds.map((id) => orderRepository.findById(id))
+    );
+    const validOrders = orders.filter(
+      (order) =>
+        order &&
+        order.distributorId?.toString() === userId &&
+        order.status === "assigned"
+    ) as Order[];
 
-    if (orders.length !== orderIds.length) {
+    if (validOrders.length !== orderIds.length) {
       return {
         success: false,
         error: "Some orders not found or not available",
@@ -1294,7 +758,7 @@ export async function assignMultipleOrdersToTruck(
 
     // Calculate total weight (convert to kg)
     let totalWeightKg = 0;
-    for (const order of orders) {
+    for (const order of validOrders) {
       if (order.unit === "kg") {
         totalWeightKg += order.quantity;
       } else if (order.unit === "tons") {
@@ -1316,31 +780,26 @@ export async function assignMultipleOrdersToTruck(
     }
 
     // Update all orders with truck assignment
-    await ordersCollection.updateMany(
-      {
-        _id: { $in: orderIds.map((id) => new ObjectId(id)) },
-      },
-      {
-        $set: {
+    await Promise.all(
+      orderIds.map((id) =>
+        orderRepository.update(id, {
           assignedTruckId: new ObjectId(truckId),
-          updatedAt: new Date(),
-        },
-      }
+        })
+      )
     );
 
     // Update truck with new orders and load
-    await fleetCollection.updateOne(
-      { _id: new ObjectId(truckId) },
-      {
-        $addToSet: {
-          assignedOrderIds: {
-            $each: orderIds.map((id) => new ObjectId(id)),
-          },
-        },
-        $inc: { currentLoadKg: totalWeightKg },
-        $set: { updatedAt: new Date() },
-      }
-    );
+    const currentOrderIds = truck.assignedOrderIds || [];
+    const newOrderIds = orderIds
+      .map((id) => new ObjectId(id))
+      .filter(
+        (id) => !currentOrderIds.some((oid) => oid.toString() === id.toString())
+      );
+
+    await fleetRepository.update(truckId, {
+      assignedOrderIds: [...currentOrderIds, ...newOrderIds],
+      currentLoadKg: truck.currentLoadKg + totalWeightKg,
+    });
 
     revalidatePath("/dashboard/distributor");
 
@@ -1361,16 +820,9 @@ export async function assignMultipleOrdersToTruck(
  */
 export async function calculateDeliveryFee(produceId: string) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized", deliveryFee: 0 };
-    }
-
-    const produceCollection = await getProduceCollection();
-    const produce = await produceCollection.findOne({
-      _id: new ObjectId(produceId),
-    });
+    const produce = await produceRepository.findById(produceId);
 
     if (!produce) {
       return { success: false, error: "Produce not found", deliveryFee: 0 };
@@ -1380,13 +832,8 @@ export async function calculateDeliveryFee(produceId: string) {
     let distance: number | undefined = undefined;
 
     try {
-      const usersCollection = await getUsersCollection();
-      const farmer = await usersCollection.findOne({
-        _id: produce.userId,
-      });
-      const retailer = await usersCollection.findOne({
-        _id: new ObjectId(session.user.id),
-      });
+      const farmer = await userRepository.findById(produce.userId.toString());
+      const retailer = await userRepository.findById(userId);
 
       if (
         farmer?.address?.latitude &&

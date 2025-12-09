@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
 import { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
 import {
@@ -16,14 +16,11 @@ import {
  */
 export async function getMyLoyaltyPoints() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const loyaltyCollection = await getUserLoyaltyPointsCollection();
     const loyalty = await loyaltyCollection.findOne({
-      userId: new ObjectId(session.user.id),
+      userId: new ObjectId(userId),
     });
 
     if (!loyalty) {
@@ -92,14 +89,11 @@ export async function getMyLoyaltyPoints() {
  */
 export async function getPointsHistory(limit = 50) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const transactionsCollection = await getPointsTransactionsCollection();
     const transactions = await transactionsCollection
-      .find({ userId: new ObjectId(session.user.id) })
+      .find({ userId: new ObjectId(userId) })
       .sort({ createdAt: -1 })
       .limit(limit)
       .toArray();
@@ -124,10 +118,7 @@ export async function getPointsHistory(limit = 50) {
  */
 export async function redeemPoints(orderId: string, pointsToRedeem: number) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     if (pointsToRedeem < LOYALTY_CONFIG.minRedemptionPoints) {
       return {
@@ -138,7 +129,7 @@ export async function redeemPoints(orderId: string, pointsToRedeem: number) {
 
     const loyaltyCollection = await getUserLoyaltyPointsCollection();
     const loyalty = await loyaltyCollection.findOne({
-      userId: new ObjectId(session.user.id),
+      userId: new ObjectId(userId),
     });
 
     const currentBalance = loyalty
@@ -155,7 +146,7 @@ export async function redeemPoints(orderId: string, pointsToRedeem: number) {
 
     // Deduct points
     await loyaltyCollection.updateOne(
-      { userId: new ObjectId(session.user.id) },
+      { userId: new ObjectId(userId) },
       {
         $inc: { totalRedeemed: pointsToRedeem },
         $set: { updatedAt: new Date() },
@@ -166,7 +157,7 @@ export async function redeemPoints(orderId: string, pointsToRedeem: number) {
     const transactionsCollection = await getPointsTransactionsCollection();
     const newBalance = currentBalance - pointsToRedeem;
     const transaction: PointsTransaction = {
-      userId: new ObjectId(session.user.id),
+      userId: new ObjectId(userId),
       orderId: new ObjectId(orderId),
       type: "redeemed",
       points: pointsToRedeem,
@@ -197,10 +188,8 @@ export async function redeemPoints(orderId: string, pointsToRedeem: number) {
  */
 export async function getLoyaltyStats() {
   try {
-    const session = await auth();
-    if (!session?.user?.id || !session.user.isAdmin) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { requireAdmin } = await import("@/services/auth.service");
+    await requireAdmin();
 
     const loyaltyCollection = await getUserLoyaltyPointsCollection();
     const transactionsCollection = await getPointsTransactionsCollection();

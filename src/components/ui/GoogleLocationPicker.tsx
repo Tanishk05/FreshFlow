@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap } from "@react-google-maps/api";
+import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 
 interface GoogleLocationPickerProps {
   lat: number;
@@ -14,9 +15,6 @@ interface GoogleLocationPickerProps {
     pincode?: string
   ) => void;
 }
-
-import type { Library } from "@googlemaps/js-api-loader";
-const GOOGLE_MAPS_LIBRARIES: Library[] = ["places", "marker"];
 
 const containerStyle = {
   width: "100%",
@@ -33,10 +31,7 @@ export default function GoogleLocationPicker({
   lng,
   onChange,
 }: GoogleLocationPickerProps) {
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  const { isLoaded } = useGoogleMaps(); // Use shared provider
 
   const [map, setMap] = React.useState<google.maps.Map | null>(null);
   const markerRef =
@@ -79,12 +74,13 @@ export default function GoogleLocationPicker({
     };
   }, [map, lat, lng]);
 
-  if (!isLoaded)
+  if (!isLoaded) {
     return (
-      <div className="w-full h-[300px] flex items-center justify-center">
-        Loading map...
+      <div className="w-full h-[300px] flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <span className="text-gray-500">Loading map...</span>
       </div>
     );
+  }
 
   // Helper for reverse geocoding
   const reverseGeocode = (lat: number, lng: number) => {

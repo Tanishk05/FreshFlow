@@ -72,29 +72,47 @@ export default function AlertsCard({ alerts, onOpenPanel }: Props) {
   }, [alerts]);
 
   useEffect(() => {
-    const socket = getSocket();
-    socket.on(
-      "farmer-alert-update",
-      (update: { type: string; alert: Alert }) => {
-        setLiveAlerts((prev) => {
-          if (update.type === "add") {
-            if (!prev.some((a) => a.id === update.alert.id)) {
-              return [update.alert, ...prev];
-            }
-            return prev;
-          } else if (update.type === "update") {
-            return prev.map((a) =>
-              a.id === update.alert.id ? { ...a, ...update.alert } : a
-            );
-          } else if (update.type === "remove") {
-            return prev.filter((a) => a.id !== update.alert.id);
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted) return;
+
+        socketInstance.on(
+          "farmer-alert-update",
+          (update: { type: string; alert: Alert }) => {
+            if (!isMounted) return;
+            setLiveAlerts((prev) => {
+              if (update.type === "add") {
+                if (!prev.some((a) => a.id === update.alert.id)) {
+                  return [update.alert, ...prev];
+                }
+                return prev;
+              } else if (update.type === "update") {
+                return prev.map((a) =>
+                  a.id === update.alert.id ? { ...a, ...update.alert } : a
+                );
+              } else if (update.type === "remove") {
+                return prev.filter((a) => a.id !== update.alert.id);
+              }
+              return prev;
+            });
           }
-          return prev;
-        });
+        );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
       }
-    );
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("farmer-alert-update");
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.off("farmer-alert-update");
+      }
     };
   }, []);
 

@@ -1,7 +1,8 @@
 "use server";
 
-import { auth } from "@/auth";
-import client from "@/lib/db";
+import { requireAuth } from "@/services/auth.service";
+import { orderRepository } from "@/repositories/order.repository";
+import { produceRepository } from "@/repositories/produce.repository";
 import { ObjectId } from "mongodb";
 
 export type PerformanceMetrics = {
@@ -40,15 +41,7 @@ interface ProduceDocument {
 
 export async function getFarmerPerformanceMetrics() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const dbClient = await client;
-    const db = dbClient.db(process.env.MONGODB_DB);
-    const ordersCollection = db.collection<OrderDocument>("orders");
-    const produceCollection = db.collection<ProduceDocument>("produce");
+    const { userId } = await requireAuth();
 
     // Get current month date range
     const now = new Date();
@@ -61,18 +54,21 @@ export async function getFarmerPerformanceMetrics() {
     const lastDayOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
     // Fetch all farmer's orders
-    const allOrders = await ordersCollection
-      .find({ farmerId: new ObjectId(session.user.id) })
-      .toArray();
+    const result = await orderRepository.findMany(
+      { farmerId: userId },
+      { page: 1, limit: 10000 }
+    );
+    const allOrders = result.data;
 
     // Current month orders
     const currentMonthOrders = allOrders.filter(
-      (order) => new Date(order.orderDate) >= firstDayOfMonth
+      (order) => order.orderDate && new Date(order.orderDate) >= firstDayOfMonth
     );
 
     // Last month orders for comparison
     const lastMonthOrders = allOrders.filter(
       (order) =>
+        order.orderDate &&
         new Date(order.orderDate) >= firstDayOfLastMonth &&
         new Date(order.orderDate) <= lastDayOfLastMonth
     );
@@ -106,11 +102,12 @@ export async function getFarmerPerformanceMetrics() {
       deliveredOrders > 0 ? totalRevenue / deliveredOrders : 0;
 
     // Get active produce listings
-    const activeListings = await produceCollection.countDocuments({
-      userId: new ObjectId(session.user.id),
+    const activeProduce = await produceRepository.findMany({
+      userId: userId,
       isAvailable: true,
       isVisible: true,
     });
+    const activeListings = activeProduce.length;
 
     // Calculate total quantity sold this month
     const totalQuantitySold = currentMonthOrders

@@ -1,42 +1,10 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireAuth, requireAdmin } from "@/services/auth.service";
+import { settingsRepository, type SystemSettingsDB } from "@/repositories/settings.repository";
+import { serializeDate, serializeObjectId } from "@/lib/serialization";
 import client from "@/lib/db";
-
-// System settings interface for database (with Date)
-interface SystemSettingsDB {
-  _id?: any;
-  aiFeatures: {
-    enabled: boolean;
-    dynamicPricing: boolean;
-    marketIntelligence: boolean;
-    personalizedInsights: boolean;
-    demandForecasting: boolean;
-  };
-  emailNotifications: {
-    enabled: boolean;
-    criticalAlerts: boolean;
-    warningAlerts: boolean;
-    infoAlerts: boolean;
-  };
-  features: {
-    userRegistration: boolean;
-    publicMarketplace: boolean;
-    orderTracking: boolean;
-    inventoryManagement: boolean;
-  };
-  apiLimits: {
-    geminiDailyLimit: number;
-    geminiRateLimit: number;
-    emailDailyLimit: number;
-  };
-  maintenance: {
-    enabled: boolean;
-    message: string;
-  };
-  updatedAt: Date;
-  updatedBy: string;
-}
+import { DatabaseConfig } from "@/lib/config";
 
 // System settings interface (serialized for client components)
 export interface SystemSettings {
@@ -73,21 +41,14 @@ export interface SystemSettings {
   updatedBy: string;
 }
 
-async function getSettingsCollection() {
-  const dbClient = await client;
-  const db = dbClient.db(process.env.MONGODB_DB);
-  return db.collection<SystemSettingsDB>("system_settings");
-}
 
 // Get system settings
 export async function getSystemSettings(): Promise<SystemSettings> {
-  const session = await auth();
-  if (!session?.user) {
-    throw new Error("Unauthorized");
-  }
+  // Check authentication
+  const { userEmail } = await requireAuth();
 
-  const settingsCollection = await getSettingsCollection();
-  let settings = await settingsCollection.findOne({});
+  // Use repository to fetch settings
+  let settings = await settingsRepository.findOne();
 
   if (!settings) {
     // Create default settings
@@ -122,12 +83,12 @@ export async function getSystemSettings(): Promise<SystemSettings> {
         message: "",
       },
       updatedAt: now,
-      updatedBy: session.user.email || "system",
+      updatedBy: userEmail || "system",
     };
 
-    await settingsCollection.insertOne(defaultSettings);
+    await settingsRepository.create(defaultSettings);
     // Fetch the inserted document to get the _id
-    settings = await settingsCollection.findOne({});
+    settings = await settingsRepository.findOne();
   }
 
   if (!settings) {
@@ -136,17 +97,13 @@ export async function getSystemSettings(): Promise<SystemSettings> {
 
   // Serialize for client components: convert ObjectId to string and Date to ISO string
   return {
-    _id: settings._id?.toString(),
+    _id: serializeObjectId(settings._id) || undefined,
     aiFeatures: settings.aiFeatures,
     emailNotifications: settings.emailNotifications,
     features: settings.features,
     apiLimits: settings.apiLimits,
     maintenance: settings.maintenance,
-    updatedAt: settings.updatedAt instanceof Date 
-      ? settings.updatedAt.toISOString() 
-      : typeof settings.updatedAt === 'string' 
-        ? settings.updatedAt 
-        : new Date().toISOString(),
+    updatedAt: serializeDate(settings.updatedAt) || new Date().toISOString(),
     updatedBy: settings.updatedBy,
   } as SystemSettings;
 }
@@ -155,38 +112,26 @@ export async function getSystemSettings(): Promise<SystemSettings> {
 export async function updateSystemSettings(
   updates: Partial<SystemSettings>
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user) {
-    return { success: false, message: "Unauthorized" };
-  }
-
-  // Check if admin
-  const { isAdmin } = await import("./adminActions");
-  if (!(await isAdmin())) {
-    return { success: false, message: "Admin access required" };
-  }
-
   try {
-    const settingsCollection = await getSettingsCollection();
+    // Check admin access
+    const { userEmail } = await requireAdmin();
 
-    const result = await settingsCollection.updateOne(
-      {},
-      {
-        $set: {
-          ...updates,
-          updatedAt: new Date(),
-          updatedBy: session.user.email || "admin",
-        },
-      },
-      { upsert: true }
-    );
+    // Use repository to update settings
+    const result = await settingsRepository.update({
+      ...updates,
+      updatedAt: new Date(),
+      updatedBy: userEmail || "admin",
+    } as Partial<SystemSettingsDB>);
 
-    if (result.modifiedCount > 0 || result.upsertedCount > 0) {
+    if (result.success) {
       return { success: true, message: "Settings updated successfully" };
     } else {
       return { success: false, message: "No changes made" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error updating settings:", error);
     return { success: false, message: "Failed to update settings" };
   }
@@ -197,31 +142,21 @@ export async function toggleAIFeature(
   feature: keyof SystemSettings["aiFeatures"],
   enabled: boolean
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user) {
-    return { success: false, message: "Unauthorized" };
-  }
-
-  const { isAdmin } = await import("./adminActions");
-  if (!(await isAdmin())) {
-    return { success: false, message: "Admin access required" };
-  }
-
   try {
-    const settingsCollection = await getSettingsCollection();
+    // Check admin access
+    const { userEmail } = await requireAdmin();
 
-    const result = await settingsCollection.updateOne(
-      {},
-      {
-        $set: {
-          [`aiFeatures.${feature}`]: enabled,
-          updatedAt: new Date(),
-          updatedBy: session.user.email || "admin",
-        },
-      }
+    // Use repository to update feature
+    const result = await settingsRepository.updateField(
+      `aiFeatures.${feature}`,
+      enabled
     );
 
-    if (result.modifiedCount > 0) {
+    // Also update metadata
+    await settingsRepository.updateField("updatedAt", new Date());
+    await settingsRepository.updateField("updatedBy", userEmail || "admin");
+
+    if (result.success) {
       return {
         success: true,
         message: `AI feature ${feature} ${enabled ? "enabled" : "disabled"}`,
@@ -230,6 +165,9 @@ export async function toggleAIFeature(
       return { success: false, message: "Failed to update feature" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error toggling AI feature:", error);
     return { success: false, message: "Failed to toggle AI feature" };
   }
@@ -240,31 +178,18 @@ export async function toggleEmailNotifications(
   type: keyof SystemSettings["emailNotifications"],
   enabled: boolean
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user) {
-    return { success: false, message: "Unauthorized" };
-  }
-
-  const { isAdmin } = await import("./adminActions");
-  if (!(await isAdmin())) {
-    return { success: false, message: "Admin access required" };
-  }
-
   try {
-    const settingsCollection = await getSettingsCollection();
+    // Check admin access
+    const { userEmail } = await requireAdmin();
 
-    const result = await settingsCollection.updateOne(
-      {},
-      {
-        $set: {
-          [`emailNotifications.${type}`]: enabled,
-          updatedAt: new Date(),
-          updatedBy: session.user.email || "admin",
-        },
-      }
-    );
+    // Use repository to update notifications and metadata in one call
+    const result = await settingsRepository.update({
+      [`emailNotifications.${type}`]: enabled,
+      updatedAt: new Date(),
+      updatedBy: userEmail || "admin",
+    });
 
-    if (result.modifiedCount > 0) {
+    if (result.success) {
       return {
         success: true,
         message: `Email notifications ${type} ${
@@ -275,6 +200,9 @@ export async function toggleEmailNotifications(
       return { success: false, message: "Failed to update notifications" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error toggling email notifications:", error);
     return { success: false, message: "Failed to toggle notifications" };
   }
@@ -285,32 +213,19 @@ export async function toggleMaintenanceMode(
   enabled: boolean,
   message?: string
 ): Promise<{ success: boolean; message: string }> {
-  const session = await auth();
-  if (!session?.user) {
-    return { success: false, message: "Unauthorized" };
-  }
-
-  const { isAdmin } = await import("./adminActions");
-  if (!(await isAdmin())) {
-    return { success: false, message: "Admin access required" };
-  }
-
   try {
-    const settingsCollection = await getSettingsCollection();
+    // Check admin access
+    const { userEmail } = await requireAdmin();
 
-    const result = await settingsCollection.updateOne(
-      {},
-      {
-        $set: {
-          "maintenance.enabled": enabled,
-          "maintenance.message": message || "",
-          updatedAt: new Date(),
-          updatedBy: session.user.email || "admin",
-        },
-      }
-    );
+    // Use repository to update maintenance mode
+    const result = await settingsRepository.update({
+      "maintenance.enabled": enabled,
+      "maintenance.message": message || "",
+      updatedAt: new Date(),
+      updatedBy: userEmail || "admin",
+    } as Partial<SystemSettingsDB>);
 
-    if (result.modifiedCount > 0) {
+    if (result.success) {
       return {
         success: true,
         message: `Maintenance mode ${enabled ? "enabled" : "disabled"}`,
@@ -319,6 +234,9 @@ export async function toggleMaintenanceMode(
       return { success: false, message: "Failed to update maintenance mode" };
     }
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, message: error.message };
+    }
     console.error("Error toggling maintenance mode:", error);
     return { success: false, message: "Failed to toggle maintenance mode" };
   }
@@ -343,19 +261,12 @@ export async function getSystemStats(): Promise<{
     emailsSentToday: number;
   };
 }> {
-  const session = await auth();
-  if (!session?.user) {
-    throw new Error("Unauthorized");
-  }
-
-  const { isAdmin } = await import("./adminActions");
-  if (!(await isAdmin())) {
-    throw new Error("Admin access required");
-  }
+  // Check admin access
+  await requireAdmin();
 
   try {
     const dbClient = await client;
-    const db = dbClient.db(process.env.MONGODB_DB);
+    const db = dbClient.db(DatabaseConfig.defaultDatabase);
 
     // Get today's date range
     const today = new Date();

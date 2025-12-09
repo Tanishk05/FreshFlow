@@ -67,7 +67,7 @@ export default function FarmerOrdersPage() {
 
         // Fetch orders
         const ordersResult = await getMyOrders();
-        if (ordersResult.success && ordersResult.data) {
+        if (ordersResult.success && "data" in ordersResult) {
           setOrders(ordersResult.data as Order[]);
         }
       } catch (error) {
@@ -86,7 +86,7 @@ export default function FarmerOrdersPage() {
       if (result.success) {
         // Refresh orders
         const ordersResult = await getMyOrders();
-        if (ordersResult.success && ordersResult.data) {
+        if (ordersResult.success && "data" in ordersResult) {
           setOrders(ordersResult.data as Order[]);
         }
       }
@@ -101,7 +101,7 @@ export default function FarmerOrdersPage() {
       if (result.success) {
         // Refresh orders
         const ordersResult = await getMyOrders();
-        if (ordersResult.success && ordersResult.data) {
+        if (ordersResult.success && "data" in ordersResult) {
           setOrders(ordersResult.data as Order[]);
         }
       }

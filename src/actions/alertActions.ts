@@ -1,7 +1,9 @@
 "use server";
 
-import { getProduceCollection } from "@/models/Produce";
-import { auth } from "@/auth";
+import { produceRepository } from "@/repositories/produce.repository";
+import { orderRepository } from "@/repositories/order.repository";
+import { userRepository } from "@/repositories/user.repository";
+import { requireAuth } from "@/services/auth.service";
 import { ObjectId } from "mongodb";
 
 export type AlertType = "critical" | "warning" | "info" | "reminder";
@@ -48,13 +50,10 @@ function calculateDaysUntilExpiry(
 }
 
 async function getFarmerAlerts(userId: ObjectId): Promise<Alert[]> {
-  const produceCollection = await getProduceCollection();
   const alerts: Alert[] = [];
   const now = new Date();
 
-  const farmerProduce = await produceCollection
-    .find({ userId: userId })
-    .toArray();
+  const farmerProduce = await produceRepository.findByUserId(userId.toString());
 
   for (const produce of farmerProduce) {
     const daysUntilExpiry = calculateDaysUntilExpiry(
@@ -132,11 +131,11 @@ async function getFarmerAlerts(userId: ObjectId): Promise<Alert[]> {
     }
   }
 
-  const { getOrdersCollection } = await import("@/models/Order");
-  const ordersCollection = await getOrdersCollection();
-  const pendingOrders = await ordersCollection
-    .find({ farmerId: userId, status: "pending" })
-    .toArray();
+  const pendingOrdersResult = await orderRepository.findMany(
+    { farmerId: userId.toString(), status: "pending" },
+    { page: 1, limit: 1000 }
+  );
+  const pendingOrders = pendingOrdersResult.data;
 
   if (pendingOrders.length > 0) {
     alerts.push({
@@ -156,7 +155,6 @@ async function getFarmerAlerts(userId: ObjectId): Promise<Alert[]> {
 }
 
 async function getRetailerAlerts(userId: ObjectId): Promise<Alert[]> {
-  const produceCollection = await getProduceCollection();
   const alerts: Alert[] = [];
   const now = new Date();
 
@@ -204,11 +202,13 @@ async function getRetailerAlerts(userId: ObjectId): Promise<Alert[]> {
     });
   }
 
-  const marketplaceProduce = await produceCollection
-    .find({ isVisible: true, isAvailable: true })
-    .limit(20)
-    .toArray();
-  if (marketplaceProduce.length === 0) {
+  const marketplaceProduce = await produceRepository.findMany({
+    isVisible: true,
+    isAvailable: true,
+  });
+  // Limit to 20
+  const limitedProduce = marketplaceProduce.slice(0, 20);
+  if (limitedProduce.length === 0) {
     alerts.push({
       id: "no-produce",
       type: "warning",
@@ -289,30 +289,40 @@ async function getDistributorAlerts(userId: ObjectId): Promise<Alert[]> {
 }
 
 export async function getMyAlerts(): Promise<Alert[]> {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  const userId = new ObjectId(session.user.id);
-  const userRole = session.user.role;
+  const { userId } = await requireAuth();
+  
+  const user = await userRepository.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+  
+  const userIdObj = new ObjectId(userId);
+  const userRole = user.role;
 
   let alerts: Alert[] = [];
 
   switch (userRole) {
     case "farmer":
-      alerts = await getFarmerAlerts(userId);
+      alerts = await getFarmerAlerts(userIdObj);
       break;
     case "retailer":
-      alerts = await getRetailerAlerts(userId);
+      alerts = await getRetailerAlerts(userIdObj);
       break;
     case "distributor":
-      alerts = await getDistributorAlerts(userId);
+      alerts = await getDistributorAlerts(userIdObj);
       break;
     default:
       return [];
   }
 
   // Create notifications for new alerts and send email
-  await processNewAlerts(userId, alerts, session);
+  await processNewAlerts(userIdObj, alerts, {
+    user: {
+      email: user.email,
+      name: user.name,
+      role: user.role || undefined,
+    },
+  });
 
   return alerts;
 }

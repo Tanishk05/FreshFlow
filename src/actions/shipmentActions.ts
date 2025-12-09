@@ -1,7 +1,9 @@
 "use server";
 
-import { getShipmentsCollection, Shipment } from "@/models/Shipment";
-import { auth } from "@/auth";
+import { Shipment } from "@/models/Shipment";
+import { requireAuth } from "@/services/auth.service";
+import { shipmentRepository } from "@/repositories/shipment.repository";
+import { serializeDocument } from "@/lib/serialization";
 import { ObjectId } from "mongodb";
 
 /**
@@ -9,30 +11,18 @@ import { ObjectId } from "mongodb";
  */
 export async function getMyShipments() {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const shipmentsCollection = await getShipmentsCollection();
-    const farmerId = new ObjectId(session.user.id);
-
-    const shipments = await shipmentsCollection
-      .find({ farmerId })
-      .sort({ createdAt: -1 })
-      .toArray();
+    const shipments = await shipmentRepository.findByFarmerId(userId);
 
     return {
       success: true,
-      data: shipments.map((shipment) => ({
-        ...shipment,
-        _id: shipment._id!.toString(),
-        farmerId: shipment.farmerId.toString(),
-        orderId: shipment.orderId?.toString(),
-      })),
+      data: shipments.map((shipment) => serializeDocument(shipment)),
     };
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, error: error.message };
+    }
     console.error("Error fetching shipments:", error);
     return { success: false, error: "Failed to fetch shipments" };
   }
@@ -49,16 +39,10 @@ export async function createShipment(data: {
   eta: Date;
 }) {
   try {
-    const session = await auth();
+    const { userId } = await requireAuth();
 
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const shipmentsCollection = await getShipmentsCollection();
-
-    const shipment: Shipment = {
-      farmerId: new ObjectId(session.user.id),
+    const shipment: Omit<Shipment, "_id"> = {
+      farmerId: new ObjectId(userId),
       orderId: data.orderId ? new ObjectId(data.orderId) : undefined,
       origin: data.origin,
       destination: data.destination,
@@ -69,18 +53,19 @@ export async function createShipment(data: {
       updatedAt: new Date(),
     };
 
-    const result = await shipmentsCollection.insertOne(shipment);
+    const result = await shipmentRepository.create(shipment);
 
     return {
       success: true,
-      data: {
+      data: serializeDocument({
         ...shipment,
-        _id: result.insertedId.toString(),
-        farmerId: shipment.farmerId.toString(),
-        orderId: shipment.orderId?.toString(),
-      },
+        _id: result.insertedId,
+      }),
     };
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, error: error.message };
+    }
     console.error("Error creating shipment:", error);
     return { success: false, error: "Failed to create shipment" };
   }
@@ -94,37 +79,21 @@ export async function updateShipmentStatus(
   status: "in-transit" | "delivered" | "delayed"
 ) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const shipmentsCollection = await getShipmentsCollection();
-    const farmerId = new ObjectId(session.user.id);
+    const { userId } = await requireAuth();
 
     // Verify the shipment belongs to this farmer
-    const shipment = await shipmentsCollection.findOne({
-      _id: new ObjectId(shipmentId),
-      farmerId,
-    });
-
-    if (!shipment) {
-      return { success: false, error: "Shipment not found" };
+    const shipment = await shipmentRepository.findById(shipmentId);
+    if (!shipment || shipment.farmerId.toString() !== userId) {
+      return { success: false, error: "Shipment not found or unauthorized" };
     }
 
-    await shipmentsCollection.updateOne(
-      { _id: new ObjectId(shipmentId) },
-      {
-        $set: {
-          status,
-          updatedAt: new Date(),
-        },
-      }
-    );
+    const result = await shipmentRepository.updateStatus(shipmentId, status);
 
-    return { success: true };
+    return { success: result.success };
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating shipment:", error);
     return { success: false, error: "Failed to update shipment" };
   }

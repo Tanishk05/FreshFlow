@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Head from "next/head";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { NextAuthProvider } from "@/providers/SessionProvider";
+import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -105,10 +105,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head></head>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <NextAuthProvider>{children}</NextAuthProvider>
+          <NextAuthProvider>
+            <GoogleMapsProvider>{children}</GoogleMapsProvider>
+          </NextAuthProvider>
         </ThemeProvider>
       </body>
     </html>

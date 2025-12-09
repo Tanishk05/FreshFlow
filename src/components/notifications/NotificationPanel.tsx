@@ -21,31 +21,49 @@ export default function NotificationPanel({
 
   useEffect(() => {
     loadNotifications();
-    const socket = getSocket();
-    socket.on(
-      "notification-update",
-      (update: { type: string; notification: Notification }) => {
-        setNotifications((prev) => {
-          if (update.type === "add") {
-            if (!prev.some((n) => n._id === update.notification._id)) {
-              return [update.notification, ...prev];
-            }
-            return prev;
-          } else if (update.type === "update") {
-            return prev.map((n) =>
-              n._id === update.notification._id
-                ? { ...n, ...update.notification }
-                : n
-            );
-          } else if (update.type === "remove") {
-            return prev.filter((n) => n._id !== update.notification._id);
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted) return;
+
+        socketInstance.on(
+          "notification-update",
+          (update: { type: string; notification: Notification }) => {
+            if (!isMounted) return;
+            setNotifications((prev) => {
+              if (update.type === "add") {
+                if (!prev.some((n) => n._id === update.notification._id)) {
+                  return [update.notification, ...prev];
+                }
+                return prev;
+              } else if (update.type === "update") {
+                return prev.map((n) =>
+                  n._id === update.notification._id
+                    ? { ...n, ...update.notification }
+                    : n
+                );
+              } else if (update.type === "remove") {
+                return prev.filter((n) => n._id !== update.notification._id);
+              }
+              return prev;
+            });
           }
-          return prev;
-        });
+        );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
       }
-    );
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("notification-update");
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.off("notification-update");
+      }
     };
   }, []);
 

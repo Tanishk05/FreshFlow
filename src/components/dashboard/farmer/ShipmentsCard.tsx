@@ -27,29 +27,51 @@ export default function ShipmentsCard({ shipments }: Props) {
   }, [shipments]);
 
   useEffect(() => {
-    const socket = getSocket();
-    socket.on(
-      "farmer-shipment-update",
-      (update: { type: string; shipment: ShipmentFromDB }) => {
-        setLiveShipments((prev) => {
-          if (update.type === "add") {
-            if (!prev.some((s) => s._id === update.shipment._id)) {
-              return [update.shipment, ...prev];
-            }
-            return prev;
-          } else if (update.type === "update") {
-            return prev.map((s) =>
-              s._id === update.shipment._id ? { ...s, ...update.shipment } : s
-            );
-          } else if (update.type === "remove") {
-            return prev.filter((s) => s._id !== update.shipment._id);
+    // Only connect socket when component mounts and needs real-time updates
+    let isMounted = true;
+    let socketInstance: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket(); // Now async
+        if (!isMounted) return;
+
+        socketInstance.on(
+          "farmer-shipment-update",
+          (update: { type: string; shipment: ShipmentFromDB }) => {
+            if (!isMounted) return;
+            setLiveShipments((prev) => {
+              if (update.type === "add") {
+                if (!prev.some((s) => s._id === update.shipment._id)) {
+                  return [update.shipment, ...prev];
+                }
+                return prev;
+              } else if (update.type === "update") {
+                return prev.map((s) =>
+                  s._id === update.shipment._id
+                    ? { ...s, ...update.shipment }
+                    : s
+                );
+              } else if (update.type === "remove") {
+                return prev.filter((s) => s._id !== update.shipment._id);
+              }
+              return prev;
+            });
           }
-          return prev;
-        });
+        );
+      } catch (error) {
+        console.error("Failed to connect socket:", error);
       }
-    );
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("farmer-shipment-update");
+      isMounted = false;
+      // Remove event listeners when component unmounts
+      if (socketInstance) {
+        socketInstance.off("farmer-shipment-update");
+      }
     };
   }, []);
 

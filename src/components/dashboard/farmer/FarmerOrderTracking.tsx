@@ -120,7 +120,7 @@ export default function FarmerOrderTracking({ orders }: Props) {
     try {
       const result = await markOrderAsPickedUp(orderId);
       if (result.success) {
-        alert(result.message || "Order marked as picked up successfully");
+        alert("Order marked as picked up successfully");
         window.location.reload(); // Refresh to see updated status
       } else {
         alert(result.error || "Failed to mark order as picked up");

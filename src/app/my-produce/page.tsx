@@ -424,9 +424,11 @@ export default function MyProducePage() {
                               fill
                               className="object-cover"
                               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              loading="lazy"
+                              priority={false}
                               onError={(e) => {
                                 // Hide image on error, fallback will show
-                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.style.display = "none";
                               }}
                             />
                           </div>
@@ -752,6 +754,8 @@ export default function MyProducePage() {
                         alt="Produce Preview"
                         height={200}
                         width={200}
+                        loading="lazy"
+                        priority={false}
                         className="rounded-lg max-h-32 object-contain border border-gray-200 dark:border-gray-700"
                       />
                       <button

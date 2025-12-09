@@ -7,9 +7,7 @@ import { useFormStatus } from "react-dom";
 import React, { useActionState } from "react";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import GoogleLocationPicker from "@/components/ui/GoogleLocationPicker";
-import { useJsApiLoader } from "@react-google-maps/api";
-
-import type { Libraries } from "@react-google-maps/api";
+import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 
 // --- Styled UI Components ---
 
@@ -80,12 +78,8 @@ function SubmitButton() {
   );
 }
 
-const GOOGLE_MAPS_LIBRARIES: Libraries = ["places", "marker"];
 export default function CompleteSignupPage() {
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  const { isLoaded } = useGoogleMaps(); // Use shared provider
   const { data: session, status } = useSession();
   const router = useRouter();
 

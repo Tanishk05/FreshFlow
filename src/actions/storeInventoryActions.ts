@@ -4,7 +4,7 @@ import {
   getStoreInventoryCollection,
   StoreInventory,
 } from "@/models/StoreInventory";
-import { auth } from "@/auth";
+import { requireAuth } from "@/services/auth.service";
 import { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
 
@@ -13,14 +13,10 @@ import { revalidatePath } from "next/cache";
  */
 export async function getMyStoreInventory() {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const inventoryCollection = await getStoreInventoryCollection();
-    const retailerId = new ObjectId(session.user.id);
+    const retailerId = new ObjectId(userId);
 
     const inventory = await inventoryCollection
       .find({ retailerId })
@@ -72,11 +68,7 @@ export async function addStoreInventoryItem(data: {
   category?: string;
 }) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const inventoryCollection = await getStoreInventoryCollection();
     const now = new Date();
@@ -84,7 +76,7 @@ export async function addStoreInventoryItem(data: {
     expiryDate.setDate(expiryDate.getDate() + data.shelfLifeDays);
 
     const item: StoreInventory = {
-      retailerId: new ObjectId(session.user.id),
+      retailerId: new ObjectId(userId),
       name: data.name,
       stock: data.stock,
       reorderPoint: data.reorderPoint,
@@ -121,14 +113,10 @@ export async function addStoreInventoryItem(data: {
  */
 export async function updateInventoryStock(itemId: string, newStock: number) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const inventoryCollection = await getStoreInventoryCollection();
-    const retailerId = new ObjectId(session.user.id);
+    const retailerId = new ObjectId(userId);
 
     // Verify the item belongs to this retailer
     const item = await inventoryCollection.findOne({
@@ -164,14 +152,10 @@ export async function updateInventoryStock(itemId: string, newStock: number) {
  */
 export async function markItemAsSpoiled(itemId: string) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const inventoryCollection = await getStoreInventoryCollection();
-    const retailerId = new ObjectId(session.user.id);
+    const retailerId = new ObjectId(userId);
 
     // Verify the item belongs to this retailer
     const item = await inventoryCollection.findOne({
@@ -208,14 +192,10 @@ export async function markItemAsSpoiled(itemId: string) {
  */
 export async function deleteInventoryItem(itemId: string) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const inventoryCollection = await getStoreInventoryCollection();
-    const retailerId = new ObjectId(session.user.id);
+    const retailerId = new ObjectId(userId);
 
     // Verify the item belongs to this retailer
     const item = await inventoryCollection.findOne({
@@ -243,14 +223,10 @@ export async function deleteInventoryItem(itemId: string) {
  */
 export async function getInventoryStats() {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const { userId } = await requireAuth();
 
     const inventoryCollection = await getStoreInventoryCollection();
-    const retailerId = new ObjectId(session.user.id);
+    const retailerId = new ObjectId(userId);
 
     const inventory = await inventoryCollection.find({ retailerId }).toArray();
 

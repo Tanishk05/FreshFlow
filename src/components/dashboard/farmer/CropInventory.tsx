@@ -106,6 +106,8 @@ export default function CropInventory({
                               fill
                               className="object-cover"
                               sizes="48px"
+                              loading="lazy"
+                              priority={false}
                             />
                           </div>
                         ) : (

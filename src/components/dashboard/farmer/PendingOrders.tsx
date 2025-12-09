@@ -23,6 +23,7 @@ type Props = {
 };
 
 import { getSocket } from "@/lib/socket";
+import type { Socket } from "socket.io-client";
 
 export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
   const [liveOrders, setLiveOrders] = React.useState(orders);
@@ -32,24 +33,53 @@ export default function PendingOrders({ orders, onApprove, onCancel }: Props) {
   }, [orders]);
 
   useEffect(() => {
-    const socket = getSocket();
-    socket.on("farmer-order-update", (update: { type: string; order: OrderFromDB }) => {
-      setLiveOrders((prev) => {
-        if (update.type === "add") {
-          if (!prev.some((o) => o._id === update.order._id)) {
-            return [update.order, ...prev];
-          }
-          return prev;
-        } else if (update.type === "update") {
-          return prev.map((o) => (o._id === update.order._id ? { ...o, ...update.order } : o));
-        } else if (update.type === "remove") {
-          return prev.filter((o) => o._id !== update.order._id);
+    let isMounted = true;
+    let socketInstance: Socket | null = null;
+
+    const initSocket = async () => {
+      try {
+        socketInstance = await getSocket();
+        if (!isMounted || !socketInstance) return;
+
+        // Verify socketInstance has the 'on' method
+        if (typeof socketInstance.on !== "function") {
+          console.error("Socket instance is not valid");
+          return;
         }
-        return prev;
-      });
-    });
+
+        socketInstance.on(
+          "farmer-order-update",
+          (update: { type: string; order: OrderFromDB }) => {
+            if (!isMounted) return;
+            setLiveOrders((prev) => {
+              if (update.type === "add") {
+                if (!prev.some((o) => o._id === update.order._id)) {
+                  return [update.order, ...prev];
+                }
+                return prev;
+              } else if (update.type === "update") {
+                return prev.map((o) =>
+                  o._id === update.order._id ? { ...o, ...update.order } : o
+                );
+              } else if (update.type === "remove") {
+                return prev.filter((o) => o._id !== update.order._id);
+              }
+              return prev;
+            });
+          }
+        );
+      } catch (error) {
+        console.error("Failed to initialize socket:", error);
+      }
+    };
+
+    initSocket();
+
     return () => {
-      socket.off("farmer-order-update");
+      isMounted = false;
+      if (socketInstance && typeof socketInstance.off === "function") {
+        socketInstance.off("farmer-order-update");
+      }
     };
   }, []);
 

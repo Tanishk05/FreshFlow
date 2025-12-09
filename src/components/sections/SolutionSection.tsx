@@ -67,9 +67,11 @@ export default function SolutionSection() {
                   <Image
                     src={SOLUTION_STEPS[activeStep].image}
                     alt={SOLUTION_STEPS[activeStep].title}
-                    layout="fill"
-                    objectFit="cover"
-                    className="absolute inset-0"
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    loading="lazy"
+                    priority={false}
                   />
                 </motion.div>
               </AnimatePresence>

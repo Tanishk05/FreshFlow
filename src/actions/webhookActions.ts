@@ -1,7 +1,7 @@
 "use server";
 
 import { triggerWebhook, WebhookPayload, WebhookEvent } from "@/lib/webhooks";
-import { getUsersCollection } from "@/models/User";
+import { userRepository } from "@/repositories/user.repository";
 import { ObjectId } from "mongodb";
 
 /**
@@ -21,18 +21,16 @@ export async function triggerOrderWebhook(params: {
   destination?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const usersCollection = await getUsersCollection();
-
     // Fetch user details for notifications and emails
     const [farmer, retailer, distributor] = await Promise.all([
       params.farmerId
-        ? usersCollection.findOne({ _id: new ObjectId(params.farmerId) })
+        ? userRepository.findById(params.farmerId)
         : null,
       params.retailerId
-        ? usersCollection.findOne({ _id: new ObjectId(params.retailerId) })
+        ? userRepository.findById(params.retailerId)
         : null,
       params.distributorId
-        ? usersCollection.findOne({ _id: new ObjectId(params.distributorId) })
+        ? userRepository.findById(params.distributorId)
         : null,
     ]);
 
