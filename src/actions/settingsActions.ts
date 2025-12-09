@@ -3,6 +3,41 @@
 import { auth } from "@/auth";
 import client from "@/lib/db";
 
+// System settings interface for database (with Date)
+interface SystemSettingsDB {
+  _id?: any;
+  aiFeatures: {
+    enabled: boolean;
+    dynamicPricing: boolean;
+    marketIntelligence: boolean;
+    personalizedInsights: boolean;
+    demandForecasting: boolean;
+  };
+  emailNotifications: {
+    enabled: boolean;
+    criticalAlerts: boolean;
+    warningAlerts: boolean;
+    infoAlerts: boolean;
+  };
+  features: {
+    userRegistration: boolean;
+    publicMarketplace: boolean;
+    orderTracking: boolean;
+    inventoryManagement: boolean;
+  };
+  apiLimits: {
+    geminiDailyLimit: number;
+    geminiRateLimit: number;
+    emailDailyLimit: number;
+  };
+  maintenance: {
+    enabled: boolean;
+    message: string;
+  };
+  updatedAt: Date;
+  updatedBy: string;
+}
+
 // System settings interface (serialized for client components)
 export interface SystemSettings {
   _id?: string;
@@ -41,7 +76,7 @@ export interface SystemSettings {
 async function getSettingsCollection() {
   const dbClient = await client;
   const db = dbClient.db(process.env.MONGODB_DB);
-  return db.collection<SystemSettings>("system_settings");
+  return db.collection<SystemSettingsDB>("system_settings");
 }
 
 // Get system settings
@@ -57,7 +92,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
   if (!settings) {
     // Create default settings
     const now = new Date();
-    const defaultSettings = {
+    const defaultSettings: SystemSettingsDB = {
       aiFeatures: {
         enabled: true,
         dynamicPricing: true,
@@ -91,7 +126,12 @@ export async function getSystemSettings(): Promise<SystemSettings> {
     };
 
     await settingsCollection.insertOne(defaultSettings);
-    settings = defaultSettings;
+    // Fetch the inserted document to get the _id
+    settings = await settingsCollection.findOne({});
+  }
+
+  if (!settings) {
+    throw new Error("Failed to create or retrieve system settings");
   }
 
   // Serialize for client components: convert ObjectId to string and Date to ISO string

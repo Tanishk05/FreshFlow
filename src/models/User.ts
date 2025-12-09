@@ -41,6 +41,27 @@ export interface User {
   sessions?: unknown[];
 }
 
+// Serialized User type for client components (ObjectId and Date converted to strings)
+export interface UserSerialized {
+  _id: string;
+  name?: string | null;
+  username?: string | null;
+  email: string | null;
+  emailVerified?: string | null; // ISO string
+  image?: string | null;
+  phone?: string | null;
+  role?: UserRole | null;
+  address?: UserAddress;
+  isAdmin?: boolean;
+  banned?: boolean;
+  bannedAt?: string | null; // ISO string
+  password?: string | null;
+  verifyToken?: string | null;
+  verifyTokenExpires?: string | null; // ISO string
+  accounts?: unknown[];
+  sessions?: unknown[];
+}
+
 // 4. Helper function to get the database
 async function getDb(): Promise<Db> {
   const dbClient = await client;

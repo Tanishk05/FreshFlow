@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
-import { getUsersCollection, type User } from "@/models/User";
+import { getUsersCollection, type User, type UserSerialized } from "@/models/User";
 import { ObjectId } from "mongodb";
 
 // Check if user is admin
@@ -48,7 +48,7 @@ export async function getAllUsers(
   search?: string,
   role?: string
 ): Promise<{
-  users: User[];
+  users: UserSerialized[];
   total: number;
   pages: number;
   currentPage: number;
@@ -232,7 +232,7 @@ export async function verifyUserEmail(
 }
 
 // Get user details
-export async function getUserDetails(userId: string): Promise<User | null> {
+export async function getUserDetails(userId: string): Promise<UserSerialized | null> {
   const session = await auth();
   if (!session?.user || !(await isAdmin())) {
     throw new Error("Unauthorized: Admin access required");

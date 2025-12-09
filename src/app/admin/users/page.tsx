@@ -13,17 +13,17 @@ import {
   toggleUserAdmin,
   isAdmin,
 } from "@/actions/adminActions";
-import type { User } from "@/models/User";
+import type { UserSerialized } from "@/models/User";
 
 // Helper to get user ID as string
-// After serialization in server actions, _id is always a string, but TypeScript doesn't know that
-const getUserId = (user: User): string => {
-  return typeof user._id === 'string' ? user._id : String(user._id);
+// After serialization in server actions, _id is always a string
+const getUserId = (user: UserSerialized): string => {
+  return user._id;
 };
 
 export default function AdminUsersPage() {
   const router = useRouter();
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserSerialized[]>([]);
   const [stats, setStats] = useState<{
     total: number;
     farmers: number;
@@ -36,7 +36,7 @@ export default function AdminUsersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserSerialized | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Check admin access
@@ -479,7 +479,7 @@ function UserManagementModal({
   onDelete,
   loading,
 }: {
-  user: User;
+  user: UserSerialized;
   onClose: () => void;
   onUpdateRole: (userId: string, role: string) => void;
   onVerifyEmail: (userId: string) => void;
